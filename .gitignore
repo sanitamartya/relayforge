@@ -19,3 +19,5 @@ coverage/
 
 # Operating system
 .DS_Store
+
+/generated/prisma
