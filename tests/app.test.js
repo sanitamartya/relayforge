@@ -8,7 +8,7 @@ test("GET /health returns a successful health response", async () => {
   const response = await request(app).get("/health");
 
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, {
+  assert.deepEqual(response.body.data, {
     status: "ok",
     service: "relayforge",
   });
