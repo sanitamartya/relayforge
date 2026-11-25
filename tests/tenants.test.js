@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 
 import app from "../src/app.js";
+import { eventQueue } from "../src/queue/event-queue.js";
 import { prisma } from "../src/db/prisma.js";
 
 test("POST /tenants creates and persists a tenant", async () => {
@@ -52,5 +53,6 @@ test("POST /tenants rejects a missing name", async () => {
 });
 
 after(async () => {
+  await eventQueue.close();
   await prisma.$disconnect();
 });

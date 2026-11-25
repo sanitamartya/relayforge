@@ -1,5 +1,6 @@
 import express from "express";
 import { prisma } from "./db/prisma.js";
+import { eventQueue } from "./queue/event-queue.js";
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.post("/tenants/:id/events", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Event payload must be a JSON object or array");
   }
 
+  // First, persist the event in PostgreSQL.
   const event = await prisma.event.create({
     data: {
       tenantId,
@@ -93,6 +95,20 @@ app.post("/tenants/:id/events", async (req, res) => {
       payload,
     },
   });
+
+  // Then, enqueue a background job for this event.
+  await eventQueue.add(
+    "process-event",
+    {
+      eventId: event.id,
+      tenantId: event.tenantId,
+      eventType: event.eventType,
+      payload: event.payload,
+    },
+    {
+      jobId: event.id,
+    },
+  );
 
   return sendSuccess(res, 201, {
     id: event.id,

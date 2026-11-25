@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 
 import app from "../src/app.js";
+import { eventQueue } from "../src/queue/event-queue.js";
 import { prisma } from "../src/db/prisma.js";
 
 test("GET /tenants/:id/events returns only that tenant's events", async () => {
@@ -75,5 +76,6 @@ test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
 });
 
 after(async () => {
+  await eventQueue.close();
   await prisma.$disconnect();
 });

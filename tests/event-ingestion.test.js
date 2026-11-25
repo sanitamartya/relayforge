@@ -5,8 +5,9 @@ import request from "supertest";
 
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
+import { eventQueue } from "../src/queue/event-queue.js";
 
-test("POST /tenants/:id/events creates and persists an event", async () => {
+test("POST /tenants/:id/events creates, persists, and queues an event", async () => {
   const tenant = await prisma.tenant.create({
     data: {
       name: `event-test-${randomUUID()}`,
@@ -21,6 +22,8 @@ test("POST /tenants/:id/events creates and persists an event", async () => {
     },
   };
 
+  let eventId;
+
   try {
     const response = await request(app).post(`/tenants/${tenant.id}/events`).send(eventData);
 
@@ -30,15 +33,40 @@ test("POST /tenants/:id/events creates and persists an event", async () => {
     assert.deepEqual(response.body.data.payload, eventData.payload);
     assert.equal(typeof response.body.data.id, "string");
 
+    eventId = response.body.data.id;
+
+    // Verify the event was persisted in PostgreSQL.
     const savedEvent = await prisma.event.findUnique({
-      where: { id: response.body.data.id },
+      where: { id: eventId },
     });
 
     assert.ok(savedEvent);
     assert.equal(savedEvent.tenantId, tenant.id);
     assert.equal(savedEvent.eventType, eventData.eventType);
     assert.deepEqual(savedEvent.payload, eventData.payload);
+
+    // Verify a BullMQ job was created for the event.
+    const queuedJob = await eventQueue.getJob(eventId);
+
+    assert.ok(queuedJob);
+    assert.equal(queuedJob.name, "process-event");
+    assert.equal(queuedJob.id, eventId);
+    assert.deepEqual(queuedJob.data, {
+      eventId,
+      tenantId: tenant.id,
+      eventType: eventData.eventType,
+      payload: eventData.payload,
+    });
   } finally {
+    // Remove the test job if it still exists.
+    if (eventId) {
+      const queuedJob = await eventQueue.getJob(eventId);
+
+      if (queuedJob) {
+        await queuedJob.remove();
+      }
+    }
+
     // Tenant deletion cascades to its events.
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
@@ -106,5 +134,6 @@ test("POST /tenants/:id/events rejects a non-object payload", async () => {
 });
 
 after(async () => {
+  await eventQueue.close();
   await prisma.$disconnect();
 });

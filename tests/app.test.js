@@ -1,8 +1,9 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 
 import app from "../src/app.js";
+import { eventQueue } from "../src/queue/event-queue.js";
 
 test("GET /health returns a successful health response", async () => {
   const response = await request(app).get("/health");
@@ -24,4 +25,8 @@ test("Unknown routes return a JSON 404 response", async () => {
       message: "Route not found",
     },
   });
+});
+
+after(async () => {
+  await eventQueue.close();
 });
