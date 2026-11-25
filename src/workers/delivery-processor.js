@@ -17,27 +17,42 @@ export async function processDelivery(deliveryId) {
     throw new Error(`Delivery ${deliveryId} was not found`);
   }
 
-  // Avoid sending a delivery that has already completed.
-  if (delivery.status === "DELIVERED" || delivery.status === "FAILED") {
+  // A completed or currently processing delivery should not be sent again.
+  if (delivery.status !== "PENDING") {
     return {
       skipped: true,
       status: delivery.status,
     };
   }
 
-  const attemptCount = delivery.attemptCount + 1;
   const lastAttemptAt = new Date();
 
-  await prisma.webhookDelivery.update({
-    where: { id: deliveryId },
+  // Atomically claim the delivery.
+  // Only one worker can change this exact PENDING row to PROCESSING.
+  const claim = await prisma.webhookDelivery.updateMany({
+    where: {
+      id: deliveryId,
+      status: "PENDING",
+      attemptCount: delivery.attemptCount,
+    },
     data: {
       status: "PROCESSING",
-      attemptCount,
+      attemptCount: {
+        increment: 1,
+      },
       lastAttemptAt,
       nextAttemptAt: null,
     },
   });
 
+  if (claim.count !== 1) {
+    return {
+      skipped: true,
+      status: "CLAIMED_BY_ANOTHER_WORKER",
+    };
+  }
+
+  const attemptCount = delivery.attemptCount + 1;
   let statusCode = null;
 
   try {
@@ -49,6 +64,9 @@ export async function processDelivery(deliveryId) {
         "x-relayforge-event-id": delivery.event.id,
         "x-relayforge-delivery-id": delivery.id,
         "x-relayforge-event-type": delivery.event.eventType,
+
+        // Stable across every retry of this delivery.
+        "idempotency-key": delivery.id,
       },
       body: JSON.stringify({
         id: delivery.event.id,
@@ -65,8 +83,12 @@ export async function processDelivery(deliveryId) {
       throw new Error(`Webhook endpoint returned HTTP ${response.status}`);
     }
 
-    await prisma.webhookDelivery.update({
-      where: { id: deliveryId },
+    const completed = await prisma.webhookDelivery.updateMany({
+      where: {
+        id: deliveryId,
+        status: "PROCESSING",
+        attemptCount,
+      },
       data: {
         status: "DELIVERED",
         deliveredAt: new Date(),
@@ -76,6 +98,10 @@ export async function processDelivery(deliveryId) {
       },
     });
 
+    if (completed.count !== 1) {
+      throw new Error("Could not mark the delivery as DELIVERED");
+    }
+
     return {
       delivered: true,
       statusCode,
@@ -84,11 +110,15 @@ export async function processDelivery(deliveryId) {
   } catch (error) {
     const message = String(error.message || error).slice(0, MAX_ERROR_LENGTH);
 
-    // BullMQ will retry this job using its exponential backoff.
+    // BullMQ uses exponential backoff between retry attempts.
     const retryDelayMs = 1000 * 2 ** (attemptCount - 1);
 
-    await prisma.webhookDelivery.update({
-      where: { id: deliveryId },
+    await prisma.webhookDelivery.updateMany({
+      where: {
+        id: deliveryId,
+        status: "PROCESSING",
+        attemptCount,
+      },
       data: {
         status: "PENDING",
         lastStatusCode: statusCode,

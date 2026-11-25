@@ -49,6 +49,7 @@ async function createTestDelivery(url) {
 test("delivery processor sends HTTP request and marks delivery DELIVERED", async () => {
   let receivedBody;
   let receivedDeliveryId;
+  let receivedIdempotencyKey;
 
   const server = createServer(async (req, res) => {
     const chunks = [];
@@ -59,6 +60,7 @@ test("delivery processor sends HTTP request and marks delivery DELIVERED", async
 
     receivedBody = JSON.parse(Buffer.concat(chunks).toString());
     receivedDeliveryId = req.headers["x-relayforge-delivery-id"];
+    receivedIdempotencyKey = req.headers["idempotency-key"];
 
     res.writeHead(204);
     res.end();
@@ -78,6 +80,7 @@ test("delivery processor sends HTTP request and marks delivery DELIVERED", async
     assert.equal(result.statusCode, 204);
 
     assert.equal(receivedDeliveryId, testData.deliveryId);
+    assert.equal(receivedIdempotencyKey, testData.deliveryId);
     assert.equal(receivedBody.type, "test.event");
     assert.deepEqual(receivedBody.data, {
       message: "hello",
@@ -128,6 +131,50 @@ test("delivery processor records an HTTP failure for retry", async () => {
     assert.equal(savedDelivery.lastStatusCode, 503);
     assert.ok(savedDelivery.lastError);
     assert.ok(savedDelivery.nextAttemptAt);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
+test("concurrent processing sends only one request for a delivery", async () => {
+  let requestCount = 0;
+
+  const server = createServer((req, res) => {
+    requestCount += 1;
+
+    res.writeHead(200);
+    res.end("accepted");
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  const port = server.address().port;
+  const url = `http://127.0.0.1:${port}/webhook`;
+
+  const testData = await createTestDelivery(url);
+
+  try {
+    const results = await Promise.all([
+      processDelivery(testData.deliveryId),
+      processDelivery(testData.deliveryId),
+    ]);
+
+    assert.equal(requestCount, 1);
+
+    assert.equal(results.filter((result) => result.delivered === true).length, 1);
+
+    assert.equal(results.filter((result) => result.skipped === true).length, 1);
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "DELIVERED");
+    assert.equal(savedDelivery.attemptCount, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
 
