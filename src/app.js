@@ -1,4 +1,5 @@
 import express from "express";
+import { URL } from "node:url";
 import { prisma } from "./db/prisma.js";
 import { eventQueue } from "./queue/event-queue.js";
 
@@ -63,6 +64,63 @@ app.get("/tenants/:id", async (req, res) => {
     id: tenant.id,
     name: tenant.name,
     createdAt: tenant.createdAt,
+  });
+});
+
+// Register a webhook endpoint for a tenant.
+app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
+  const { id: tenantId } = req.params;
+  const url = req.body?.url;
+
+  // Verify that the endpoint belongs to an existing tenant.
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true },
+  });
+
+  if (!tenant) {
+    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
+  }
+
+  if (typeof url !== "string" || url.trim().length === 0) {
+    return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL is required");
+  }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(url.trim());
+  } catch {
+    return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL must be a valid URL");
+  }
+
+  if (
+    !["http:", "https:"].includes(parsedUrl.protocol) ||
+    !parsedUrl.hostname ||
+    parsedUrl.username ||
+    parsedUrl.password
+  ) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "Webhook URL must use HTTP or HTTPS and cannot contain credentials",
+    );
+  }
+
+  const endpoint = await prisma.webhookEndpoint.create({
+    data: {
+      tenantId,
+      url: parsedUrl.toString(),
+    },
+  });
+
+  return sendSuccess(res, 201, {
+    id: endpoint.id,
+    tenantId: endpoint.tenantId,
+    url: endpoint.url,
+    enabled: endpoint.enabled,
+    createdAt: endpoint.createdAt,
   });
 });
 

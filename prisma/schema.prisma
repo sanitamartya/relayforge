@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,13 +7,21 @@ datasource db {
   provider = "postgresql"
 }
 
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
 model Tenant {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  events Event[]
+  events    Event[]
+  endpoints WebhookEndpoint[]
 }
 
 model Event {
@@ -22,7 +31,44 @@ model Event {
   payload   Json
   createdAt DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
 
   @@index([tenantId, createdAt])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  url       String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId, enabled])
+}
+
+model WebhookDelivery {
+  id             String         @id @default(uuid()) @db.Uuid
+  eventId        String         @db.Uuid
+  endpointId     String         @db.Uuid
+  status         DeliveryStatus @default(PENDING)
+  attemptCount   Int            @default(0)
+  lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  lastStatusCode Int?
+  lastError      String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  event    Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, endpointId])
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
 }
