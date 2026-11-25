@@ -1,18 +1,16 @@
 import express from "express";
 import { URL } from "node:url";
 import { prisma } from "./db/prisma.js";
-import { eventQueue } from "./queue/event-queue.js";
+import { eventQueue, deliveryJobOptions } from "./queue/event-queue.js";
 
 const app = express();
 
 app.use(express.json());
 
-// Send every successful response in a consistent format.
 function sendSuccess(res, statusCode, data) {
   return res.status(statusCode).json({ data });
 }
 
-// Send every error response in a consistent format.
 function sendError(res, statusCode, code, message) {
   return res.status(statusCode).json({
     error: {
@@ -67,12 +65,10 @@ app.get("/tenants/:id", async (req, res) => {
   });
 });
 
-// Register a webhook endpoint for a tenant.
 app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   const { id: tenantId } = req.params;
   const url = req.body?.url;
 
-  // Verify that the endpoint belongs to an existing tenant.
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { id: true },
@@ -124,6 +120,7 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   });
 });
 
+// Publish an event and create its delivery records.
 app.post("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
   const { eventType, payload } = req.body ?? {};
@@ -145,35 +142,125 @@ app.post("/tenants/:id/events", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Event payload must be a JSON object or array");
   }
 
-  // First, persist the event in PostgreSQL.
-  const event = await prisma.event.create({
-    data: {
+  // Create the event and its delivery records in one transaction.
+  const result = await prisma.$transaction(async (tx) => {
+    const event = await tx.event.create({
+      data: {
+        tenantId,
+        eventType: eventType.trim(),
+        payload,
+      },
+    });
+
+    const endpoints = await tx.webhookEndpoint.findMany({
+      where: {
+        tenantId,
+        enabled: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const deliveries = await Promise.all(
+      endpoints.map((endpoint) =>
+        tx.webhookDelivery.create({
+          data: {
+            eventId: event.id,
+            endpointId: endpoint.id,
+          },
+        }),
+      ),
+    );
+
+    return { event, deliveries };
+  });
+
+  // Queue one job per delivery.
+  // If queueing fails, the database records remain pending.
+  // The worker's recovery dispatcher will find them later.
+  for (const delivery of result.deliveries) {
+    await eventQueue.add(
+      "deliver-webhook",
+      {
+        deliveryId: delivery.id,
+      },
+      {
+        ...deliveryJobOptions,
+        jobId: delivery.id,
+      },
+    );
+  }
+
+  return sendSuccess(res, 201, {
+    id: result.event.id,
+    tenantId: result.event.tenantId,
+    eventType: result.event.eventType,
+    payload: result.event.payload,
+    createdAt: result.event.createdAt,
+    deliveryCount: result.deliveries.length,
+  });
+});
+
+// Retrieve delivery history for one event.
+app.get("/tenants/:id/events/:eventId/deliveries", async (req, res) => {
+  const { id: tenantId, eventId } = req.params;
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true },
+  });
+
+  if (!tenant) {
+    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
+  }
+
+  const event = await prisma.event.findFirst({
+    where: {
+      id: eventId,
       tenantId,
-      eventType: eventType.trim(),
-      payload,
+    },
+    select: {
+      id: true,
     },
   });
 
-  // Then, enqueue a background job for this event.
-  await eventQueue.add(
-    "process-event",
-    {
-      eventId: event.id,
-      tenantId: event.tenantId,
-      eventType: event.eventType,
-      payload: event.payload,
-    },
-    {
-      jobId: event.id,
-    },
-  );
+  if (!event) {
+    return sendError(res, 404, "EVENT_NOT_FOUND", "Event not found");
+  }
 
-  return sendSuccess(res, 201, {
-    id: event.id,
-    tenantId: event.tenantId,
-    eventType: event.eventType,
-    payload: event.payload,
-    createdAt: event.createdAt,
+  const deliveries = await prisma.webhookDelivery.findMany({
+    where: {
+      eventId,
+    },
+    include: {
+      endpoint: {
+        select: {
+          url: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  return sendSuccess(res, 200, {
+    deliveries: deliveries.map((delivery) => ({
+      id: delivery.id,
+      eventId: delivery.eventId,
+      endpointId: delivery.endpointId,
+      endpointUrl: delivery.endpoint.url,
+      status: delivery.status,
+      attemptCount: delivery.attemptCount,
+      lastAttemptAt: delivery.lastAttemptAt,
+      nextAttemptAt: delivery.nextAttemptAt,
+      deliveredAt: delivery.deliveredAt,
+      lastStatusCode: delivery.lastStatusCode,
+      lastError: delivery.lastError,
+      createdAt: delivery.createdAt,
+      updatedAt: delivery.updatedAt,
+    })),
   });
 });
 
@@ -205,12 +292,10 @@ app.get("/tenants/:id/events", async (req, res) => {
   });
 });
 
-// Handle requests that don't match any route.
 app.use((req, res) => {
   return sendError(res, 404, "NOT_FOUND", "Route not found");
 });
 
-// Handle errors from routes and middleware.
 app.use((err, req, res, next) => {
   console.error(err);
 

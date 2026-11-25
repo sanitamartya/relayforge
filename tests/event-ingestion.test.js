@@ -7,10 +7,17 @@ import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 
-test("POST /tenants/:id/events creates, persists, and queues an event", async () => {
+test("POST /tenants/:id/events creates an event and durable delivery", async () => {
   const tenant = await prisma.tenant.create({
     data: {
       name: `event-test-${randomUUID()}`,
+    },
+  });
+
+  const endpoint = await prisma.webhookEndpoint.create({
+    data: {
+      tenantId: tenant.id,
+      url: "https://customer.example.com/webhooks",
     },
   });
 
@@ -23,6 +30,7 @@ test("POST /tenants/:id/events creates, persists, and queues an event", async ()
   };
 
   let eventId;
+  let deliveryId;
 
   try {
     const response = await request(app).post(`/tenants/${tenant.id}/events`).send(eventData);
@@ -31,11 +39,10 @@ test("POST /tenants/:id/events creates, persists, and queues an event", async ()
     assert.equal(response.body.data.tenantId, tenant.id);
     assert.equal(response.body.data.eventType, eventData.eventType);
     assert.deepEqual(response.body.data.payload, eventData.payload);
-    assert.equal(typeof response.body.data.id, "string");
+    assert.equal(response.body.data.deliveryCount, 1);
 
     eventId = response.body.data.id;
 
-    // Verify the event was persisted in PostgreSQL.
     const savedEvent = await prisma.event.findUnique({
       where: { id: eventId },
     });
@@ -45,29 +52,36 @@ test("POST /tenants/:id/events creates, persists, and queues an event", async ()
     assert.equal(savedEvent.eventType, eventData.eventType);
     assert.deepEqual(savedEvent.payload, eventData.payload);
 
-    // Verify a BullMQ job was created for the event.
-    const queuedJob = await eventQueue.getJob(eventId);
+    const savedDelivery = await prisma.webhookDelivery.findFirst({
+      where: {
+        eventId,
+        endpointId: endpoint.id,
+      },
+    });
+
+    assert.ok(savedDelivery);
+    assert.equal(savedDelivery.status, "PENDING");
+    assert.equal(savedDelivery.attemptCount, 0);
+
+    deliveryId = savedDelivery.id;
+
+    const queuedJob = await eventQueue.getJob(deliveryId);
 
     assert.ok(queuedJob);
-    assert.equal(queuedJob.name, "process-event");
-    assert.equal(queuedJob.id, eventId);
+    assert.equal(queuedJob.name, "deliver-webhook");
+    assert.equal(queuedJob.id, deliveryId);
     assert.deepEqual(queuedJob.data, {
-      eventId,
-      tenantId: tenant.id,
-      eventType: eventData.eventType,
-      payload: eventData.payload,
+      deliveryId,
     });
   } finally {
-    // Remove the test job if it still exists.
-    if (eventId) {
-      const queuedJob = await eventQueue.getJob(eventId);
+    if (deliveryId) {
+      const queuedJob = await eventQueue.getJob(deliveryId);
 
       if (queuedJob) {
         await queuedJob.remove();
       }
     }
 
-    // Tenant deletion cascades to its events.
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
     });
@@ -75,10 +89,8 @@ test("POST /tenants/:id/events creates, persists, and queues an event", async ()
 });
 
 test("POST /tenants/:id/events returns 404 for an unknown tenant", async () => {
-  const unknownTenantId = randomUUID();
-
   const response = await request(app)
-    .post(`/tenants/${unknownTenantId}/events`)
+    .post(`/tenants/${randomUUID()}/events`)
     .send({
       eventType: "user.created",
       payload: { userId: "user-123" },

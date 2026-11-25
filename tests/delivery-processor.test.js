@@ -1,0 +1,143 @@
+/* global Buffer */
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
+
+import { prisma } from "../src/db/prisma.js";
+import { eventQueue } from "../src/queue/event-queue.js";
+import { processDelivery } from "../src/workers/delivery-processor.js";
+
+async function createTestDelivery(url) {
+  const tenant = await prisma.tenant.create({
+    data: {
+      name: `processor-test-${randomUUID()}`,
+    },
+  });
+
+  const endpoint = await prisma.webhookEndpoint.create({
+    data: {
+      tenantId: tenant.id,
+      url,
+    },
+  });
+
+  const event = await prisma.event.create({
+    data: {
+      tenantId: tenant.id,
+      eventType: "test.event",
+      payload: {
+        message: "hello",
+      },
+    },
+  });
+
+  const delivery = await prisma.webhookDelivery.create({
+    data: {
+      eventId: event.id,
+      endpointId: endpoint.id,
+    },
+  });
+
+  return {
+    tenantId: tenant.id,
+    eventId: event.id,
+    deliveryId: delivery.id,
+  };
+}
+
+test("delivery processor sends HTTP request and marks delivery DELIVERED", async () => {
+  let receivedBody;
+  let receivedDeliveryId;
+
+  const server = createServer(async (req, res) => {
+    const chunks = [];
+
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+
+    receivedBody = JSON.parse(Buffer.concat(chunks).toString());
+    receivedDeliveryId = req.headers["x-relayforge-delivery-id"];
+
+    res.writeHead(204);
+    res.end();
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  const port = server.address().port;
+  const url = `http://127.0.0.1:${port}/webhook`;
+
+  const testData = await createTestDelivery(url);
+
+  try {
+    const result = await processDelivery(testData.deliveryId);
+
+    assert.equal(result.delivered, true);
+    assert.equal(result.statusCode, 204);
+
+    assert.equal(receivedDeliveryId, testData.deliveryId);
+    assert.equal(receivedBody.type, "test.event");
+    assert.deepEqual(receivedBody.data, {
+      message: "hello",
+    });
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "DELIVERED");
+    assert.equal(savedDelivery.attemptCount, 1);
+    assert.equal(savedDelivery.lastStatusCode, 204);
+    assert.ok(savedDelivery.deliveredAt);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
+test("delivery processor records an HTTP failure for retry", async () => {
+  const server = createServer((req, res) => {
+    res.writeHead(503);
+    res.end("Service unavailable");
+  });
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  const port = server.address().port;
+  const url = `http://127.0.0.1:${port}/webhook`;
+
+  const testData = await createTestDelivery(url);
+
+  try {
+    await assert.rejects(
+      processDelivery(testData.deliveryId),
+      /Webhook endpoint returned HTTP 503/,
+    );
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "PENDING");
+    assert.equal(savedDelivery.attemptCount, 1);
+    assert.equal(savedDelivery.lastStatusCode, 503);
+    assert.ok(savedDelivery.lastError);
+    assert.ok(savedDelivery.nextAttemptAt);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
+after(async () => {
+  await eventQueue.close();
+  await prisma.$disconnect();
+});
