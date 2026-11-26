@@ -140,7 +140,12 @@ test("Kafka message handler queues pending deliveries for a valid event", async 
     { deliveryId: "delivery-2" },
     { attempts: 3, jobId: "delivery-2" },
   ]);
-  assert.deepEqual(calls.logs, [\n    { message: "kafka_event_deliveries_queued", fields: { eventId: validEventId, deliveryCount: 2 } },\n  ]);
+  assert.deepEqual(calls.logs, [
+    {
+      message: "kafka_event_deliveries_queued",
+      fields: { eventId: validEventId, deliveryCount: 2 },
+    },
+  ]);
 });
 
 test("Kafka message handler does not queue when no pending deliveries exist", async () => {
@@ -154,7 +159,12 @@ test("Kafka message handler does not queue when no pending deliveries exist", as
 
   assert.equal(calls.findMany.length, 1);
   assert.equal(calls.add.length, 0);
-  assert.deepEqual(calls.logs, [\n    { message: "kafka_event_deliveries_queued", fields: { eventId: validEventId, deliveryCount: 0 } },\n  ]);
+  assert.deepEqual(calls.logs, [
+    {
+      message: "kafka_event_deliveries_queued",
+      fields: { eventId: validEventId, deliveryCount: 0 },
+    },
+  ]);
 });
 
 test("Kafka message handler propagates database errors", async () => {
