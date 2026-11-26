@@ -183,9 +183,9 @@ curl http://localhost:3000/tenants/<TENANT_ID>/ai/operations-summary \
 The same read-only facts can be queried with a natural-language question:
 
 ```bash
-curl -X POST http://localhost:3000/tenants/<TENANT_ID>/ai/ask \\
-  -H "Authorization: Bearer <TENANT_API_KEY>" \\
-  -H "Content-Type: application/json" \\
+curl -X POST http://localhost:3000/tenants/<TENANT_ID>/ai/ask \
+  -H "Authorization: Bearer <TENANT_API_KEY>" \
+  -H "Content-Type: application/json" \
   -d '{"question":"Why are my deliveries failing?"}'
 ```
 
