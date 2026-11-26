@@ -1,5 +1,7 @@
 import { prisma } from "../db/prisma.js";
 import { publishEvent } from "./event-producer.js";
+import { logger } from "../observability/logger.js";
+import { recordBackgroundOperation } from "../observability/metrics.js";
 
 const STALE_CLAIM_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 25;
@@ -92,6 +94,16 @@ export async function publishOutboxBatch({
       });
 
       published += 1;
+      recordBackgroundOperation({
+        component: "kafka_outbox",
+        operation: "publish",
+        outcome: "published",
+      });
+      logger.info("outbox_event_published", {
+        eventId: event.id,
+        outboxId: record.id,
+        attemptCount,
+      });
     } catch (error) {
       const retryDelayMs = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** Math.min(attemptCount - 1, 9));
 
@@ -109,6 +121,17 @@ export async function publishOutboxBatch({
       });
 
       deferred += 1;
+      recordBackgroundOperation({
+        component: "kafka_outbox",
+        operation: "publish",
+        outcome: "deferred",
+      });
+      logger.warn("outbox_event_deferred", {
+        eventId: event.id,
+        outboxId: record.id,
+        attemptCount,
+        error,
+      });
     }
   }
 
