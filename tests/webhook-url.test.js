@@ -204,3 +204,68 @@ test("sendWebhookRequest rejects when the HTTP request emits an error", async (t
     (error) => error === requestError,
   );
 });
+
+async function capturePublicLookup(t) {
+  let lookup;
+
+  t.mock.method(http, "request", (_url, options, callback) => {
+    lookup = options.lookup;
+
+    callback({
+      statusCode: 204,
+      resume() {},
+    });
+
+    const request = new EventEmitter();
+    request.end = () => {};
+
+    return request;
+  });
+
+  await sendWebhookRequest("http://93.184.216.34/events");
+
+  return lookup;
+}
+
+
+test("public lookup rejects a requested IP family with no matching address", async (t) => {
+  const lookup = await capturePublicLookup(t);
+
+  const result = await new Promise((resolve) => {
+    lookup("93.184.216.34", { family: 6 }, (error, address, family) => {
+      resolve({ error, address, family });
+    });
+  });
+
+  assert.equal(result.error.code, "EAI_ADDRFAMILY");
+});
+
+test("public lookup returns all validated addresses when all is true", async (t) => {
+  const lookup = await capturePublicLookup(t);
+
+  const result = await new Promise((resolve) => {
+    lookup("93.184.216.34", { all: true }, (error, addresses) => {
+      resolve({ error, addresses });
+    });
+  });
+
+  assert.equal(result.error, null);
+  assert.deepEqual(result.addresses, [
+    { address: "93.184.216.34", family: 4 },
+  ]);
+});
+
+test("public lookup returns the first address when all is not requested", async (t) => {
+  const lookup = await capturePublicLookup(t);
+
+  const result = await new Promise((resolve) => {
+    lookup("93.184.216.34", {}, (error, address, family) => {
+      resolve({ error, address, family });
+    });
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.address, "93.184.216.34");
+  assert.equal(result.family, 4);
+});
+
