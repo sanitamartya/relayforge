@@ -181,3 +181,67 @@ test("POST /tenants/:id/events creates an outbox record when no enabled endpoint
     });
   }
 });
+
+test("POST /tenants/:id/events creates one pending delivery per enabled endpoint", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "event-fanout");
+
+  try {
+    const enabledEndpoints = await Promise.all(
+      ["https://customer.example.com/webhook-a", "https://customer.example.com/webhook-b"].map(
+        (url) =>
+          prisma.webhookEndpoint.create({
+            data: {
+              tenantId: tenant.id,
+              url,
+              enabled: true,
+            },
+          }),
+      ),
+    );
+
+    await prisma.webhookEndpoint.create({
+      data: {
+        tenantId: tenant.id,
+        url: "https://customer.example.com/disabled-webhook",
+        enabled: false,
+      },
+    });
+
+    const response = await request(app)
+      .post(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization)
+      .send({
+        eventType: "user.created",
+        payload: { userId: "user-fanout" },
+      });
+
+    assert.equal(response.status, 201);
+    assert.equal(response.body.data.deliveryCount, 2);
+
+    const eventId = response.body.data.id;
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { eventId },
+      orderBy: { endpointId: "asc" },
+    });
+
+    assert.equal(deliveries.length, 2);
+    assert.deepEqual(
+      deliveries.map((delivery) => delivery.endpointId).sort(),
+      enabledEndpoints.map((endpoint) => endpoint.id).sort(),
+    );
+    assert.ok(deliveries.every((delivery) => delivery.status === "PENDING"));
+    assert.ok(deliveries.every((delivery) => delivery.attemptCount === 0));
+
+    const outbox = await prisma.eventOutbox.findUnique({
+      where: { eventId },
+    });
+
+    assert.ok(outbox);
+    assert.equal(outbox.status, "PENDING");
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: tenant.id },
+    });
+  }
+});
+\n
