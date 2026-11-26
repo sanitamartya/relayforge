@@ -210,6 +210,34 @@ test("delivery processor rejects private IP destinations", async () => {
   }
 });
 
+test("delivery processor retries safely when the request rejects with null", async () => {
+  const testData = await createTestDelivery("https://example.com/webhook");
+
+  try {
+    await assert.rejects(
+      processDelivery(testData.deliveryId, {
+        sendRequest: async () => {
+          throw null;
+        },
+      }),
+      (error) => error === null,
+    );
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "PENDING");
+    assert.equal(savedDelivery.attemptCount, 1);
+    assert.equal(savedDelivery.lastError, "null");
+    assert.ok(savedDelivery.nextAttemptAt);
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
 after(async () => {
   await eventQueue.close();
   await prisma.$disconnect();
