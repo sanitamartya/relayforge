@@ -34,10 +34,7 @@ test("pagination cursor round-trips a record ID and timestamp", () => {
 
   assert.equal(parsed.error, null);
   assert.equal(parsed.cursor.id, record.id);
-  assert.equal(
-    parsed.cursor.createdAt.toISOString(),
-    record.createdAt.toISOString(),
-  );
+  assert.equal(parsed.cursor.createdAt.toISOString(), record.createdAt.toISOString());
 });
 
 test("pagination rejects malformed cursors", () => {
