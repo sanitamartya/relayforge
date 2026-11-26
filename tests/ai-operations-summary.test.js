@@ -70,7 +70,7 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
 
   assert.equal(tenantResponse.status, 201);
   const tenantId = tenantResponse.body.data.id;
-  const authorization = `***;
+  const authorization = `Bearer ${tenantResponse.body.data.apiKey}`;
 
   const previousProvider = process.env.AI_PROVIDER;
   process.env.AI_PROVIDER = "test-unavailable";
