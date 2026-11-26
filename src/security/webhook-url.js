@@ -58,7 +58,10 @@ function ipv4ToBigInt(address) {
     return null;
   }
 
-  return octets.reduce((value, octet) => (value << 8n) | BigInt(octet), 0n);
+  return octets.reduce(
+    (value, octet) => (value << 8n) | BigInt(octet),
+    0n,
+  );
 }
 
 function ipv6ToBigInt(address) {
@@ -131,7 +134,9 @@ export function isPublicIpAddress(address) {
   if (version === 4) {
     const value = ipv4ToBigInt(normalized);
 
-    return !IPV4_BLOCKED_CIDRS.some((cidr) => isInCidr(value, cidr, ipv4ToBigInt));
+    return !IPV4_BLOCKED_CIDRS.some((cidr) =>
+      isInCidr(value, cidr, ipv4ToBigInt),
+    );
   }
 
   if (version === 6) {
@@ -141,7 +146,9 @@ export function isPublicIpAddress(address) {
       return false;
     }
 
-    return !IPV6_BLOCKED_CIDRS.some((cidr) => isInCidr(value, cidr, ipv6ToBigInt));
+    return !IPV6_BLOCKED_CIDRS.some((cidr) =>
+      isInCidr(value, cidr, ipv6ToBigInt),
+    );
   }
 
   return false;
