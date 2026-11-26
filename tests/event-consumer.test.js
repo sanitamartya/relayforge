@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -6,9 +7,7 @@ import { createKafkaEventMessageHandler } from "../src/kafka/event-message-handl
 
 const validEventId = "550e8400-e29b-41d4-a716-446655440000";
 
-function createHandlerHarness({
-  deliveries = [{ id: "delivery-1" }, { id: "delivery-2" }],
-} = {}) {
+function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "delivery-2" }] } = {}) {
   const calls = {
     findMany: [],
     add: [],
@@ -62,10 +61,7 @@ test("Kafka event ID validation rejects objects without an event ID", () => {
 
 test("Kafka event ID validation rejects malformed UUIDs", () => {
   assert.equal(getValidEventId({ id: "not-a-uuid" }), null);
-  assert.equal(
-    getValidEventId({ id: "550e8400-e29b-01d4-a716-446655440000" }),
-    null,
-  );
+  assert.equal(getValidEventId({ id: "550e8400-e29b-01d4-a716-446655440000" }), null);
 });
 
 test("Kafka event ID validation accepts a valid id field", () => {
@@ -115,9 +111,7 @@ test("Kafka message handler ignores events with invalid IDs", async () => {
     },
   });
 
-  assert.deepEqual(calls.errors, [
-    "Kafka event contains an invalid UUID event ID",
-  ]);
+  assert.deepEqual(calls.errors, ["Kafka event contains an invalid UUID event ID"]);
   assert.equal(calls.findMany.length, 0);
   assert.equal(calls.add.length, 0);
 });
@@ -146,9 +140,7 @@ test("Kafka message handler queues pending deliveries for a valid event", async 
     { deliveryId: "delivery-2" },
     { attempts: 3, jobId: "delivery-2" },
   ]);
-  assert.deepEqual(calls.logs, [
-    "Kafka event " + validEventId + ": queued 2 deliveries",
-  ]);
+  assert.deepEqual(calls.logs, ["Kafka event " + validEventId + ": queued 2 deliveries"]);
 });
 
 test("Kafka message handler does not queue when no pending deliveries exist", async () => {
@@ -162,9 +154,7 @@ test("Kafka message handler does not queue when no pending deliveries exist", as
 
   assert.equal(calls.findMany.length, 1);
   assert.equal(calls.add.length, 0);
-  assert.deepEqual(calls.logs, [
-    "Kafka event " + validEventId + ": queued 0 deliveries",
-  ]);
+  assert.deepEqual(calls.logs, ["Kafka event " + validEventId + ": queued 0 deliveries"]);
 });
 
 test("Kafka message handler propagates database errors", async () => {
