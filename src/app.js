@@ -10,6 +10,8 @@ import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
 import { rateLimitRedis } from "./queue/rate-limit-redis.js";
 import { encodePaginationCursor, parsePagination } from "./utils/pagination.js";
+import { createModelProvider } from "./ai/model-provider.js";
+import { getTenantOperationsSummary } from "./services/operations-summary.js";
 
 const app = express();
 
@@ -172,6 +174,47 @@ app.get("/tenants/:id", async (req, res) => {
     name: tenant.name,
     createdAt: tenant.createdAt,
   });
+});
+
+app.post("/tenants/:id/ai/ask", async (req, res) => {
+  const question = req.body?.question;
+
+  if (typeof question !== "string" || question.trim().length === 0) {
+    return sendError(res, 400, "VALIDATION_ERROR", "A question is required");
+  }
+
+  const normalizedQuestion = question.trim();
+
+  if (normalizedQuestion.length > 500) {
+    return sendError(res, 400, "VALIDATION_ERROR", "Question must not exceed 500 characters");
+  }
+
+  const summary = await getTenantOperationsSummary(prisma, req.authTenantId, {
+    generateNarrative: async (facts) => {
+      const provider = createModelProvider();
+      return provider.generate(
+        `Answer the user's question using only these RelayForge operations facts. If the facts do not answer the question, say what information is missing. Do not infer causes from status codes alone.\n\nQuestion: ${normalizedQuestion}\n\nOperational facts:\n${JSON.stringify(facts, null, 2)}`,
+      );
+    },
+  });
+
+  return sendSuccess(res, 200, {
+    question: normalizedQuestion,
+    ...summary,
+  });
+});
+
+app.get("/tenants/:id/ai/operations-summary", async (req, res) => {
+  const summary = await getTenantOperationsSummary(prisma, req.authTenantId, {
+    generateNarrative: async (facts) => {
+      const provider = createModelProvider();
+      return provider.generate(
+        `Summarize these RelayForge webhook operations facts in 3-5 concise sentences. Report the numbers exactly. Describe only recorded failure details; do not infer causes or suggest that you changed anything.\n\n${JSON.stringify(facts, null, 2)}`,
+      );
+    },
+  });
+
+  return sendSuccess(res, 200, summary);
 });
 
 app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
