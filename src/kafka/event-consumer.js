@@ -2,6 +2,7 @@ import { kafka } from "./kafka-client.js";
 import { createKafkaEventMessageHandler } from "./event-message-handler.js";
 import { prisma } from "../db/prisma.js";
 import { eventQueue, deliveryJobOptions } from "../queue/event-queue.js";
+import { logger } from "../observability/logger.js";
 
 const TOPIC = "relayforge-events";
 const GROUP_ID = "relayforge-event-delivery";
@@ -26,7 +27,7 @@ export async function startKafkaEventConsumer() {
     }),
   });
 
-  console.log("RelayForge Kafka event consumer is running");
+  logger.info("kafka_event_consumer_started", { topic: TOPIC, groupId: GROUP_ID });
 }
 
 export async function stopKafkaEventConsumer() {
