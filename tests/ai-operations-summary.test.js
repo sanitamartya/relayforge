@@ -70,15 +70,13 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
 
   assert.equal(tenantResponse.status, 201);
   const tenantId = tenantResponse.body.data.id;
-  const authorization = `Bearer ${tenantResponse.body.data.apiKey}`;
+  const authorization = `***;
 
   const previousProvider = process.env.AI_PROVIDER;
   process.env.AI_PROVIDER = "test-unavailable";
 
   try {
-    const unauthenticated = await request(app).get(
-      `/tenants/${tenantId}/ai/operations-summary`,
-    );
+    const unauthenticated = await request(app).get(`/tenants/${tenantId}/ai/operations-summary`);
     assert.equal(unauthenticated.status, 401);
 
     const event = await prisma.event.create({
