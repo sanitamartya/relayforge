@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import http from "node:http";
+import https from "node:https";
 
 import {
   isPublicIpAddress,
@@ -130,3 +133,76 @@ test("resolvePublicWebhookAddresses rejects a single non-public DNS answer", asy
   );
 });
 
+
+
+test("sendWebhookRequest sends the configured HTTP request and reports a 2xx response", async (t) => {
+  let capturedUrl;
+  let capturedOptions;
+  let capturedBody;
+
+  t.mock.method(http, "request", (url, options, callback) => {
+    capturedUrl = url;
+    capturedOptions = options;
+
+    callback({
+      statusCode: 204,
+      resume() {},
+    });
+
+    const request = new EventEmitter();
+    request.end = (body) => {
+      capturedBody = body;
+    };
+
+    return request;
+  });
+
+  const result = await sendWebhookRequest("http://hooks.customer.com/events", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: '{"event":"created"}',
+  });
+
+  assert.equal(capturedUrl.hostname, "hooks.customer.com");
+  assert.equal(capturedOptions.method, "PUT");
+  assert.deepEqual(capturedOptions.headers, { "content-type": "application/json" });
+  assert.equal(capturedOptions.agent, false);
+  assert.equal(capturedOptions.maxHeaderSize, 16 * 1024);
+  assert.equal(typeof capturedOptions.lookup, "function");
+  assert.equal(capturedBody, '{"event":"created"}');
+  assert.deepEqual(result, { status: 204, ok: true });
+});
+
+test("sendWebhookRequest reports non-2xx HTTP responses as unsuccessful", async (t) => {
+  t.mock.method(http, "request", (_url, _options, callback) => {
+    callback({
+      statusCode: 503,
+      resume() {},
+    });
+
+    const request = new EventEmitter();
+    request.end = () => {};
+    return request;
+  });
+
+  const result = await sendWebhookRequest("http://hooks.customer.com/events");
+
+  assert.deepEqual(result, { status: 503, ok: false });
+});
+
+test("sendWebhookRequest rejects when the HTTP request emits an error", async (t) => {
+  const requestError = new Error("connection reset");
+
+  t.mock.method(https, "request", () => {
+    const request = new EventEmitter();
+    request.end = () => {
+      request.emit("error", requestError);
+    };
+    return request;
+  });
+
+  await assert.rejects(
+    sendWebhookRequest("https://hooks.customer.com/events"),
+    (error) => error === requestError,
+  );
+});
