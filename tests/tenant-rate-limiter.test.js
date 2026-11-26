@@ -6,7 +6,11 @@ function createFakeRedis() {
   const counts = new Map();
 
   return {
-    async eval(_script, _keyCount, key, _limit, windowMs) {
+    async eval(script, keyCount, key, limit, windowMs) {
+      assert.match(script, /redis.call\("INCR", key\)/);
+      assert.equal(keyCount, 1);
+      assert.ok(limit > 0);
+
       const count = (counts.get(key) ?? 0) + 1;
       counts.set(key, count);
 
