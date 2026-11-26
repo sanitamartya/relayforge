@@ -104,7 +104,7 @@ export async function publishOutboxBatch({
         data: {
           status: "PENDING",
           nextAttemptAt: new Date(now.getTime() + retryDelayMs),
-          lastError: String(error.message || error).slice(0, MAX_ERROR_LENGTH),
+          lastError: String(error?.message || error).slice(0, MAX_ERROR_LENGTH),
         },
       });
 
