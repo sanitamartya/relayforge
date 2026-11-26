@@ -134,10 +134,12 @@ test("GET delivery history paginates records in stable order", async () => {
     assert.equal(firstPage.body.data.deliveries.length, 2);
     assert.equal(firstPage.body.data.pagination.hasMore, true);
 
+    const nextPageQuery = new URLSearchParams({
+      limit: "2",
+      cursor: firstPage.body.data.pagination.nextCursor,
+    });
     const secondPage = await request(app)
-      .get(
-        `/tenants/${tenant.id}/events/${event.id}/deliveries?limit=2&cursor=${encodeURIComponent(firstPage.body.data.pagination.nextCursor)}`,
-      )
+      .get(`/tenants/${tenant.id}/events/${event.id}/deliveries?${nextPageQuery}`)
       .set("authorization", authorization);
 
     assert.equal(secondPage.status, 200);
