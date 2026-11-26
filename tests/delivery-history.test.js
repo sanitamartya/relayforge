@@ -9,7 +9,10 @@ import { eventQueue } from "../src/queue/event-queue.js";
 import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("GET delivery history returns delivery status for an event", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "delivery-history");
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "delivery-history",
+  );
 
   const endpoint = await prisma.webhookEndpoint.create({
     data: {
@@ -63,10 +66,13 @@ test("GET delivery history returns delivery status for an event", async () => {
   }
 });
 
-test("GET delivery history returns 404 for an event owned by another tenant", async () => {
+test("GET delivery history hides events owned by another tenant", async () => {
   const { tenant: tenantA } = await createTestTenant(prisma, "tenant-a");
 
-  const { tenant: tenantB, authorization } = await createTestTenant(prisma, "tenant-b");
+  const { tenant: tenantB, authorization } = await createTestTenant(
+    prisma,
+    "tenant-b",
+  );
 
   const event = await prisma.event.create({
     data: {
@@ -95,7 +101,10 @@ test("GET delivery history returns 404 for an event owned by another tenant", as
 });
 
 test("GET delivery history paginates records in stable order", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "delivery-pagination");
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "delivery-pagination",
+  );
 
   try {
     const event = await prisma.event.create({
@@ -139,8 +148,9 @@ test("GET delivery history paginates records in stable order", async () => {
       limit: "2",
       cursor: firstPage.body.data.pagination.nextCursor,
     });
+    const path = `/tenants/${tenant.id}/events/${event.id}/deliveries`;
     const secondPage = await request(app)
-      .get(`/tenants/${tenant.id}/events/${event.id}/deliveries?${nextPageQuery}`)
+      .get(`${path}?${nextPageQuery}`)
       .set("authorization", authorization);
 
     assert.equal(secondPage.status, 200);
