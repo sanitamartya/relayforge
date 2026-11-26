@@ -3,6 +3,7 @@ const HTTP_DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5,
 const httpRequests = new Map();
 const httpDurations = new Map();
 const backgroundOperations = new Map();
+const httpErrors = new Map();
 
 function escapeLabel(value) {
   return String(value).replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
@@ -46,7 +47,7 @@ export function recordHttpRequest({ method, route, statusCode, durationMs }) {
   });
 
   if (statusCode >= 500) {
-    increment(backgroundOperations, labels({ component: "http", operation: "request", outcome: "error" }));
+    increment(httpErrors, labels({ method, route, status: statusCode }));
   }
 }
 
@@ -78,6 +79,15 @@ export function renderMetrics() {
     lines.push(`relayforge_http_request_duration_seconds_bucket{${labelSet},le="+Inf"} ${duration.count}`);
     lines.push(`relayforge_http_request_duration_seconds_sum{${labelSet}} ${duration.sum}`);
     lines.push(`relayforge_http_request_duration_seconds_count{${labelSet}} ${duration.count}`);
+  }
+
+  lines.push(
+    "# HELP relayforge_http_errors_total Total HTTP responses with a server error status.",
+    "# TYPE relayforge_http_errors_total counter",
+  );
+
+  for (const [labelSet, value] of httpErrors) {
+    lines.push(`relayforge_http_errors_total{${labelSet}} ${value}`);
   }
 
   lines.push(
