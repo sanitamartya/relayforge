@@ -5,7 +5,7 @@ import request from "supertest";
 
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
-import { eventQueue } from "../src/queue/event-queue.js";
+import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
 
 test("POST /tenants/:id/events creates an event and durable delivery", async () => {
   const tenant = await prisma.tenant.create({
@@ -30,7 +30,6 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
   };
 
   let eventId;
-  let deliveryId;
 
   try {
     const response = await request(app).post(`/tenants/${tenant.id}/events`).send(eventData);
@@ -62,26 +61,7 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
     assert.ok(savedDelivery);
     assert.equal(savedDelivery.status, "PENDING");
     assert.equal(savedDelivery.attemptCount, 0);
-
-    deliveryId = savedDelivery.id;
-
-    const queuedJob = await eventQueue.getJob(deliveryId);
-
-    assert.ok(queuedJob);
-    assert.equal(queuedJob.name, "deliver-webhook");
-    assert.equal(queuedJob.id, deliveryId);
-    assert.deepEqual(queuedJob.data, {
-      deliveryId,
-    });
   } finally {
-    if (deliveryId) {
-      const queuedJob = await eventQueue.getJob(deliveryId);
-
-      if (queuedJob) {
-        await queuedJob.remove();
-      }
-    }
-
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
     });
@@ -146,6 +126,6 @@ test("POST /tenants/:id/events rejects a non-object payload", async () => {
 });
 
 after(async () => {
-  await eventQueue.close();
+  await disconnectKafkaProducer();
   await prisma.$disconnect();
 });

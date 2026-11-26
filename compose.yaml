@@ -32,6 +32,19 @@ services:
       timeout: 3s
       retries: 5
 
+  kafka:
+    image: apache/kafka:4.4.0
+    container_name: relayforge-kafka
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    mem_limit: 1g
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+
 volumes:
   postgres_data:
   redis_data:
+  kafka_data:

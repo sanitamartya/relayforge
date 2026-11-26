@@ -6,6 +6,7 @@ import request from "supertest";
 import app from "../src/app.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 import { prisma } from "../src/db/prisma.js";
+import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
 
 test("tenant can create and retrieve an event through the API", async () => {
   const tenantName = `workflow-test-${randomUUID()}`;
@@ -61,6 +62,7 @@ test("tenant can create and retrieve an event through the API", async () => {
 });
 
 after(async () => {
+  await disconnectKafkaProducer();
   await eventQueue.close();
   await prisma.$disconnect();
 });

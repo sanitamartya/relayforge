@@ -1,7 +1,8 @@
 import express from "express";
 import { URL } from "node:url";
 import { prisma } from "./db/prisma.js";
-import { eventQueue, deliveryJobOptions } from "./queue/event-queue.js";
+// Event delivery is queued by the Kafka consumer.
+import { publishEvent } from "./kafka/event-producer.js";
 
 const app = express();
 
@@ -176,21 +177,15 @@ app.post("/tenants/:id/events", async (req, res) => {
     return { event, deliveries };
   });
 
-  // Queue one job per delivery.
-  // If queueing fails, the database records remain pending.
-  // The worker's recovery dispatcher will find them later.
-  for (const delivery of result.deliveries) {
-    await eventQueue.add(
-      "deliver-webhook",
-      {
-        deliveryId: delivery.id,
-      },
-      {
-        ...deliveryJobOptions,
-        jobId: delivery.id,
-      },
-    );
-  }
+  // Publish the persisted event to Kafka.
+  // The Kafka consumer will queue the matching deliveries.
+  await publishEvent({
+    id: result.event.id,
+    tenantId: result.event.tenantId,
+    eventType: result.event.eventType,
+    payload: result.event.payload,
+    createdAt: result.event.createdAt,
+  });
 
   return sendSuccess(res, 201, {
     id: result.event.id,
