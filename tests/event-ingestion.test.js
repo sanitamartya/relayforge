@@ -5,6 +5,8 @@ import request from "supertest";
 
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
+import { eventQueue } from "../src/queue/event-queue.js";
+import { rateLimitRedis } from "../src/queue/rate-limit-redis.js";
 import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
 import { createTestTenant } from "./helpers/tenant-auth.js";
 
@@ -125,6 +127,8 @@ test("POST /tenants/:id/events rejects a non-object payload", async () => {
 });
 
 after(async () => {
+  await eventQueue.close();
   await disconnectKafkaProducer();
+  await rateLimitRedis.quit();
   await prisma.$disconnect();
 });
