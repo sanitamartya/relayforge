@@ -1,6 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
+import { URLSearchParams } from "node:url";
 
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
