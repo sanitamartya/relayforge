@@ -20,11 +20,35 @@ jobs:
     name: Tests, lint, and formatting
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: relayforge
+          POSTGRES_PASSWORD: relayforge
+          POSTGRES_DB: relayforge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U relayforge -d relayforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://relayforge:relayforge@localhost:5432/relayforge?schema=public
       REDIS_URL: redis://localhost:6379
       KAFKA_BROKERS: localhost:9092
+      KAFKA_CLIENT_ID: relayforge-ci
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,6 +64,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
 
       - name: Run quality checks
         run: npm run check
