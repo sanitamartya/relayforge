@@ -13,7 +13,7 @@ function sendAuthenticationError(res) {
 
 export async function requireTenantApiKey(req, res, next) {
   const authorization = req.get("authorization");
-  const match = authorization?.match(/^Bearer\\s+(\\S+)$/i);
+  const match = authorization?.match(/^Bearer\s+(\S+)$/i);
   const apiKey = match?.[1];
 
   if (!apiKey || apiKey.length > 200) {
