@@ -87,3 +87,46 @@ test("resolvePublicWebhookAddresses rejects mixed public and private DNS answers
     /non-public IP address/,
   );
 });
+
+test("resolvePublicWebhookAddresses rejects DNS lookup failures", async () => {
+  await assert.rejects(
+    resolvePublicWebhookAddresses("hooks.customer.com", async () => {
+      throw new Error("DNS lookup failed");
+    }),
+    /hostname could not be resolved/,
+  );
+});
+
+test("resolvePublicWebhookAddresses rejects an empty DNS result", async () => {
+  await assert.rejects(
+    resolvePublicWebhookAddresses("hooks.customer.com", async () => []),
+    /did not resolve to an IP address/,
+  );
+});
+
+test("resolvePublicWebhookAddresses returns a public IP literal without DNS", async () => {
+  const addresses = await resolvePublicWebhookAddresses("93.184.216.34", async () => {
+    assert.fail("DNS lookup must not be called for an IP literal");
+  });
+
+  assert.deepEqual(addresses, [{ address: "93.184.216.34", family: 4 }]);
+});
+
+test("resolvePublicWebhookAddresses rejects local hostnames before DNS", async () => {
+  await assert.rejects(
+    resolvePublicWebhookAddresses("service.local", async () => {
+      assert.fail("DNS lookup must not be called for a blocked hostname");
+    }),
+    /local or reserved hostname/,
+  );
+});
+
+test("resolvePublicWebhookAddresses rejects a single non-public DNS answer", async () => {
+  await assert.rejects(
+    resolvePublicWebhookAddresses("hooks.customer.com", async () => [
+      { address: "192.168.1.20", family: 4 },
+    ]),
+    /non-public IP address/,
+  );
+});
+
