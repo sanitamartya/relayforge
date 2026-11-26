@@ -129,3 +129,38 @@ test("caps retry delay at five minutes and bounds stored errors", async () => {
   assert.equal(db.updates[1].data.lastError.length, 1000);
   assert.equal(db.updates[1].data.nextAttemptAt.toISOString(), "2026-11-26T10:05:00.000Z");
 });
+
+test("recovers a stale PROCESSING outbox claim", async () => {
+  const record = createOutboxRecord({ status: "PROCESSING", attemptCount: 4 });
+  const queries = [];
+  const updates = [];
+  const db = {
+    eventOutbox: {
+      async findMany(args) {
+        queries.push(args);
+        return [record];
+      },
+      async updateMany(args) {
+        updates.push(args);
+        return { count: 1 };
+      },
+    },
+  };
+  const now = new Date("2026-11-26T10:00:00.000Z");
+
+  const result = await publishOutboxBatch({
+    db,
+    now,
+    publish: async () => {},
+  });
+
+  assert.deepEqual(result, { claimed: 1, published: 1, deferred: 0 });
+  assert.equal(
+    queries[0].where.OR[1].updatedAt.lte.toISOString(),
+    "2026-11-26T09:59:30.000Z",
+  );
+  assert.equal(updates[0].where.OR[1].updatedAt.lte.toISOString(), "2026-11-26T09:59:30.000Z");
+  assert.deepEqual(updates[0].data.attemptCount, { increment: 1 });
+  assert.equal(updates[1].where.attemptCount, 5);
+  assert.equal(updates[1].data.status, "PUBLISHED");
+});
