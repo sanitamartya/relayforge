@@ -1,3 +1,4 @@
+/* global fetch, AbortSignal */
 import "dotenv/config";
 import { performance } from "node:perf_hooks";
 
