@@ -119,6 +119,28 @@ test("tenant operations summary is authenticated and returns tenant-scoped deliv
     assert.equal(response.body.data.facts.recentFailures[0].lastStatusCode, 503);
     assert.equal("endpointUrl" in response.body.data.facts.recentFailures[0], false);
     assert.match(response.body.data.assistant.text, /1 webhook deliveries|1 delivery/);
+
+    const missingQuestion = await request(app)
+      .post(`/tenants/${tenantId}/ai/ask`)
+      .set("authorization", authorization)
+      .send({ question: "   " });
+    assert.equal(missingQuestion.status, 400);
+
+    const oversizedQuestion = await request(app)
+      .post(`/tenants/${tenantId}/ai/ask`)
+      .set("authorization", authorization)
+      .send({ question: "x".repeat(501) });
+    assert.equal(oversizedQuestion.status, 400);
+
+    const answer = await request(app)
+      .post(`/tenants/${tenantId}/ai/ask`)
+      .set("authorization", authorization)
+      .send({ question: "Why did my delivery fail?" });
+
+    assert.equal(answer.status, 200);
+    assert.equal(answer.body.data.question, "Why did my delivery fail?");
+    assert.equal(answer.body.data.facts.deliveryCounts.FAILED, 1);
+    assert.equal(answer.body.data.assistant.status, "unavailable");
   } finally {
     if (previousProvider === undefined) {
       delete process.env.AI_PROVIDER;
