@@ -53,6 +53,28 @@ test("parseWebhookUrl accepts a public HTTPS destination", () => {
   assert.equal(parsed.hostname, "hooks.customer.com");
 });
 
+test("parseWebhookUrl rejects empty, malformed, unsupported, and credentialed URLs", () => {
+  const invalidUrls = [
+    "",
+    "not a URL",
+    "ftp://hooks.customer.com/events",
+    "https://user:pass@hooks.customer.com/events",
+  ];
+
+  for (const url of invalidUrls) {
+    assert.throws(() => parseWebhookUrl(url));
+  }
+
+  assert.throws(() => parseWebhookUrl(null), /Webhook URL is required/);
+  assert.throws(() => parseWebhookUrl("   "), /Webhook URL is required/);
+});
+
+test("parseWebhookUrl normalizes a public hostname with trailing dot", () => {
+  const parsed = parseWebhookUrl("https://HOOKS.CUSTOMER.COM./events");
+
+  assert.equal(parsed.hostname, "hooks.customer.com.");
+});
+
 test("parseWebhookUrl rejects local hostnames and private IP literals", () => {
   const blockedUrls = [
     "http://localhost:8080/webhook",
@@ -269,3 +291,32 @@ test("public lookup returns the first address when all is not requested", async 
   assert.equal(result.family, 4);
 });
 
+
+test("public lookup forwards hostname validation and DNS errors to the callback", async (t) => {
+  const lookup = await capturePublicLookup(t);
+
+  const result = await new Promise((resolve) => {
+    lookup("service.local", {}, (error, address, family) => {
+      resolve({ error, address, family });
+    });
+  });
+
+  assert.match(result.error.message, /local or reserved hostname/);
+  assert.equal(result.address, undefined);
+  assert.equal(result.family, undefined);
+});
+
+test("public lookup filters matching address family when returning all addresses", async (t) => {
+  const lookup = await capturePublicLookup(t);
+
+  const result = await new Promise((resolve) => {
+    lookup("93.184.216.34", { family: 4, all: true }, (error, addresses) => {
+      resolve({ error, addresses });
+    });
+  });
+
+  assert.equal(result.error, null);
+  assert.deepEqual(result.addresses, [
+    { address: "93.184.216.34", family: 4 },
+  ]);
+});
