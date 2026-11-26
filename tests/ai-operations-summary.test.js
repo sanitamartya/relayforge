@@ -39,8 +39,6 @@ test("Ollama provider sends a non-streaming chat request and returns its text", 
   assert.equal(result, "Three deliveries are pending.");
 });
 
-
-
 test("operations facts preserve the full recent failure count", () => {
   const facts = buildOperationsFacts({
     statusCounts: { FAILED: 7 },
@@ -156,8 +154,6 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
     });
   }
 });
-
-
 
 after(async () => {
   await disconnectKafkaProducer();
