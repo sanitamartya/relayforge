@@ -18,7 +18,7 @@ test("GET /tenants/:id returns an existing tenant", async () => {
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.id, tenant.id);
-    assert.equal(response.body.data.name, name);
+    assert.equal(response.body.data.name, tenant.name);
     assert.equal(typeof response.body.data.createdAt, "string");
   } finally {
     await prisma.tenant.deleteMany({
