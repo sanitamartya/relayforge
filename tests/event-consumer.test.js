@@ -10,7 +10,7 @@ const validEventId = "550e8400-e29b-41d4-a716-446655440000";
 function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "delivery-2" }] } = {}) {
   const calls = {
     findMany: [],
-    add: [],
+    addBulk: [],
     warnings: [],
     errors: [],
     logs: [],
@@ -26,8 +26,8 @@ function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "deliv
       },
     },
     eventQueue: {
-      add: async (...args) => {
-        calls.add.push(args);
+      addBulk: async (jobs) => {
+        calls.addBulk.push(jobs);
       },
     },
     deliveryJobOptions: {
@@ -89,7 +89,7 @@ test("Kafka message handler ignores messages without a value", async () => {
 
   assert.equal(calls.warnings.length, 1);
   assert.equal(calls.findMany.length, 0);
-  assert.equal(calls.add.length, 0);
+  assert.equal(calls.addBulk.length, 0);
 });
 
 test("Kafka message handler ignores invalid JSON", async () => {
@@ -178,7 +178,7 @@ test("Kafka message handler propagates database errors", async () => {
       },
     },
     eventQueue: {
-      add: async () => {
+      addBulk: async () => {
         assert.fail("queue should not be called after a database error");
       },
     },
