@@ -97,6 +97,12 @@ npm run tenant:key:rotate -- <tenant-uuid>
 
 Copy the printed key immediately and store it in a secret manager or local environment file. The old key is replaced and cannot be retrieved afterward.
 
+## Webhook SSRF Protection
+
+Webhook URLs must use HTTP or HTTPS, cannot contain credentials, and cannot target local or reserved hostnames or non-public IP addresses.
+
+Before each delivery, RelayForge resolves the webhook hostname and rejects the destination if any resolved address is non-public. The delivery request uses the validated address for its connection, reducing DNS-rebinding risk. HTTP redirects are not followed automatically, so a public webhook cannot redirect the worker to an internal address.
+
 ## Getting Started
 
 ### Requirements
