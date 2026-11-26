@@ -66,31 +66,24 @@ test("parseWebhookUrl rejects local hostnames and private IP literals", () => {
   }
 });
 
-test("sendWebhookRequest rejects a private IP before connecting", async () => {
-  await assert.rejects(
-    sendWebhookRequest("http://127.0.0.1:8080/webhook"),
-    /non-public IP address/,
-  );
+test("sendWebhookRequest rejects a private IP before connecting", () => {
+  assert.throws(() => sendWebhookRequest("http://127.0.0.1:8080/webhook"), /non-public IP address/);
 });
 
 test("resolvePublicWebhookAddresses accepts public DNS answers", async () => {
-  const addresses = await resolvePublicWebhookAddresses(
-    "hooks.customer.com",
-    async () => [{ address: "93.184.216.34", family: 4 }],
-  );
+  const addresses = await resolvePublicWebhookAddresses("hooks.customer.com", async () => [
+    { address: "93.184.216.34", family: 4 },
+  ]);
 
   assert.deepEqual(addresses, [{ address: "93.184.216.34", family: 4 }]);
 });
 
 test("resolvePublicWebhookAddresses rejects mixed public and private DNS answers", async () => {
   await assert.rejects(
-    resolvePublicWebhookAddresses(
-      "hooks.customer.com",
-      async () => [
-        { address: "93.184.216.34", family: 4 },
-        { address: "10.0.0.12", family: 4 },
-      ],
-    ),
+    resolvePublicWebhookAddresses("hooks.customer.com", async () => [
+      { address: "93.184.216.34", family: 4 },
+      { address: "10.0.0.12", family: 4 },
+    ]),
     /non-public IP address/,
   );
 });

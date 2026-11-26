@@ -194,10 +194,7 @@ test("delivery processor rejects private IP destinations", async () => {
   const testData = await createTestDelivery("http://127.0.0.1:8080/webhook");
 
   try {
-    await assert.rejects(
-      processDelivery(testData.deliveryId),
-      /non-public IP address/,
-    );
+    await assert.rejects(processDelivery(testData.deliveryId), /non-public IP address/);
 
     const savedDelivery = await prisma.webhookDelivery.findUnique({
       where: { id: testData.deliveryId },

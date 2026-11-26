@@ -48,7 +48,10 @@ const BLOCKED_HOST_SUFFIXES = [
 ];
 
 function normalizeHostname(hostname) {
-  return hostname.replace(/^\[|\]$/g, "").replace(/\.+$/, "").toLowerCase();
+  return hostname
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "")
+    .toLowerCase();
 }
 
 function ipv4ToBigInt(address) {
@@ -92,9 +95,7 @@ function ipv6ToBigInt(address) {
   }
 
   const groups =
-    halves.length === 2
-      ? [...left, ...Array(missingGroups).fill("0"), ...right]
-      : left;
+    halves.length === 2 ? [...left, ...Array(missingGroups).fill("0"), ...right] : left;
 
   if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {
     return null;
@@ -115,7 +116,7 @@ function isInCidr(addressValue, cidr, parseAddress) {
   const bitCount = parseAddress === ipv4ToBigInt ? 32n : 128n;
   const shift = bitCount - BigInt(prefix);
 
-  return (addressValue >> shift) === (networkValue >> shift);
+  return addressValue >> shift === networkValue >> shift;
 }
 
 export function isPublicIpAddress(address) {
@@ -170,9 +171,7 @@ export function parseWebhookUrl(value) {
     parsedUrl.username ||
     parsedUrl.password
   ) {
-    throw new Error(
-      "Webhook URL must use HTTP or HTTPS and cannot contain credentials",
-    );
+    throw new Error("Webhook URL must use HTTP or HTTPS and cannot contain credentials");
   }
 
   if (isBlockedHostname(hostname)) {
@@ -216,9 +215,7 @@ export async function resolvePublicWebhookAddresses(hostname, lookup = dnsLookup
 
   for (const record of addresses) {
     if (!isPublicIpAddress(record.address)) {
-      throw new Error(
-        `Webhook hostname resolves to a non-public IP address (${record.address})`,
-      );
+      throw new Error(`Webhook hostname resolves to a non-public IP address (${record.address})`);
     }
   }
 
