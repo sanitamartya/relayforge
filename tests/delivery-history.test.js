@@ -9,10 +9,7 @@ import { eventQueue } from "../src/queue/event-queue.js";
 import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("GET delivery history returns delivery status for an event", async () => {
-  const { tenant, authorization } = await createTestTenant(
-    prisma,
-    "delivery-history",
-  );
+  const { tenant, authorization } = await createTestTenant(prisma, "delivery-history");
 
   const endpoint = await prisma.webhookEndpoint.create({
     data: {
@@ -69,10 +66,7 @@ test("GET delivery history returns delivery status for an event", async () => {
 test("GET delivery history hides events owned by another tenant", async () => {
   const { tenant: tenantA } = await createTestTenant(prisma, "tenant-a");
 
-  const { tenant: tenantB, authorization } = await createTestTenant(
-    prisma,
-    "tenant-b",
-  );
+  const { tenant: tenantB, authorization } = await createTestTenant(prisma, "tenant-b");
 
   const event = await prisma.event.create({
     data: {
@@ -101,10 +95,7 @@ test("GET delivery history hides events owned by another tenant", async () => {
 });
 
 test("GET delivery history paginates records in stable order", async () => {
-  const { tenant, authorization } = await createTestTenant(
-    prisma,
-    "delivery-pagination",
-  );
+  const { tenant, authorization } = await createTestTenant(prisma, "delivery-pagination");
 
   try {
     const event = await prisma.event.create({
@@ -157,13 +148,15 @@ test("GET delivery history paginates records in stable order", async () => {
     assert.equal(secondPage.body.data.deliveries.length, 1);
     assert.equal(secondPage.body.data.pagination.hasMore, false);
 
-    const returnedIds = [
-      ...firstPage.body.data.deliveries,
-      ...secondPage.body.data.deliveries,
-    ].map((delivery) => delivery.id);
+    const returnedIds = [...firstPage.body.data.deliveries, ...secondPage.body.data.deliveries].map(
+      (delivery) => delivery.id,
+    );
 
     assert.equal(new Set(returnedIds).size, 3);
-    assert.deepEqual(returnedIds, deliveries.map((delivery) => delivery.id));
+    assert.deepEqual(
+      returnedIds,
+      deliveries.map((delivery) => delivery.id),
+    );
   } finally {
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
