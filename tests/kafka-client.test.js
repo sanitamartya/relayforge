@@ -6,9 +6,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const kafkaClientModule = fileURLToPath(
-  import.meta.resolve("../src/kafka/kafka-client.js"),
-);
+const kafkaClientModule = fileURLToPath(import.meta.resolve("../src/kafka/kafka-client.js"));
 
 function runKafkaClientModule({ brokers, clientId } = {}) {
   const cwd = mkdtempSync(join(tmpdir(), "relayforge-kafka-client-"));
