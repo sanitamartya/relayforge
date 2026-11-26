@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -62,9 +62,7 @@ test("redis connection config rejects malformed URLs", () => {
 });
 
 test("redis connection config parses host, port, credentials, and database", () => {
-  const result = runRedisConnectionModule(
-    "rediss://redis%20user:p%40ss@redis.example.com:6380/4",
-  );
+  const result = runRedisConnectionModule("rediss://redis%20user:p%40ss@redis.example.com:6380/4");
 
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
