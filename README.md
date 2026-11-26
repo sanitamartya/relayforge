@@ -162,8 +162,17 @@ All successful responses use a `data` envelope. Errors use an `error` object wit
 | GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
 | POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
 | POST   | `/tenants/:id/events`                     | Tenant bearer key | Persist and publish an event        |
-| GET    | `/tenants/:id/events`                     | Tenant bearer key | List tenant events                  |
-| GET    | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Read delivery history for an event  |
+| GET    | `/tenants/:id/events`                     | Tenant bearer key | Paginated tenant event history      |
+| GET    | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Paginated delivery history          |
+
+Event and delivery history endpoints use cursor pagination. The default page size is 50 records; `limit` accepts 1–100. When a response has more records, use its `pagination.nextCursor` value as the next request's `cursor` query parameter. Stable timestamp-and-ID ordering avoids duplicates when records share a timestamp.
+
+Example:
+
+```bash
+curl -sS "http://localhost:3000/tenants/TENANT_ID/events?limit=25" \
+  -H 'authorization: Bearer TENANT_API_KEY'
+```
 
 Tenant-scoped requests must include:
 
