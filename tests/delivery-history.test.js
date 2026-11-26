@@ -6,13 +6,10 @@ import request from "supertest";
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
 import { eventQueue } from "../src/queue/event-queue.js";
+import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("GET delivery history returns delivery status for an event", async () => {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `delivery-history-${randomUUID()}`,
-    },
-  });
+  const { tenant, authorization } = await createTestTenant(prisma, "delivery-history");
 
   const endpoint = await prisma.webhookEndpoint.create({
     data: {
@@ -43,7 +40,7 @@ test("GET delivery history returns delivery status for an event", async () => {
   });
 
   try {
-    const response = await request(app).get(`/tenants/${tenant.id}/events/${event.id}/deliveries`);
+    const response = await request(app).get(`/tenants/${tenant.id}/events/${event.id}/deliveries`).set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.deliveries.length, 1);
@@ -65,17 +62,9 @@ test("GET delivery history returns delivery status for an event", async () => {
 });
 
 test("GET delivery history returns 404 for an event owned by another tenant", async () => {
-  const tenantA = await prisma.tenant.create({
-    data: {
-      name: `tenant-a-${randomUUID()}`,
-    },
-  });
+  const { tenant: tenantA } = await createTestTenant(prisma, "tenant-a");
 
-  const tenantB = await prisma.tenant.create({
-    data: {
-      name: `tenant-b-${randomUUID()}`,
-    },
-  });
+  const { tenant: tenantB, authorization } = await createTestTenant(prisma, "tenant-b");
 
   const event = await prisma.event.create({
     data: {
@@ -86,7 +75,7 @@ test("GET delivery history returns 404 for an event owned by another tenant", as
   });
 
   try {
-    const response = await request(app).get(`/tenants/${tenantB.id}/events/${event.id}/deliveries`);
+    const response = await request(app).get(`/tenants/${tenantB.id}/events/${event.id}/deliveries`).set("authorization", authorization);
 
     assert.equal(response.status, 404);
     assert.equal(response.body.error.code, "EVENT_NOT_FOUND");

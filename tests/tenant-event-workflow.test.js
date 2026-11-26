@@ -20,6 +20,7 @@ test("tenant can create and retrieve an event through the API", async () => {
     assert.equal(tenantResponse.body.data.name, tenantName);
 
     tenantId = tenantResponse.body.data.id;
+    const authorization = `Bearer ${tenantResponse.body.data.apiKey}`;
 
     // Step 2: Submit an event for that tenant.
     const eventData = {
@@ -30,7 +31,7 @@ test("tenant can create and retrieve an event through the API", async () => {
       },
     };
 
-    const eventResponse = await request(app).post(`/tenants/${tenantId}/events`).send(eventData);
+    const eventResponse = await request(app).post(`/tenants/${tenantId}/events`).set("authorization", authorization).send(eventData);
 
     assert.equal(eventResponse.status, 201);
     assert.equal(eventResponse.body.data.tenantId, tenantId);
@@ -40,7 +41,7 @@ test("tenant can create and retrieve an event through the API", async () => {
     const eventId = eventResponse.body.data.id;
 
     // Step 3: Retrieve the tenant's events through the API.
-    const eventsResponse = await request(app).get(`/tenants/${tenantId}/events`);
+    const eventsResponse = await request(app).get(`/tenants/${tenantId}/events`).set("authorization", authorization);
 
     assert.equal(eventsResponse.status, 200);
     assert.equal(eventsResponse.body.data.events.length, 1);

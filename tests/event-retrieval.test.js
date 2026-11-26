@@ -6,15 +6,12 @@ import request from "supertest";
 import app from "../src/app.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 import { prisma } from "../src/db/prisma.js";
+import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("GET /tenants/:id/events returns only that tenant's events", async () => {
-  const tenantA = await prisma.tenant.create({
-    data: { name: `tenant-a-${randomUUID()}` },
-  });
+  const { tenant: tenantA, authorization } = await createTestTenant(prisma, "tenant-a");
 
-  const tenantB = await prisma.tenant.create({
-    data: { name: `tenant-b-${randomUUID()}` },
-  });
+  const { tenant: tenantB } = await createTestTenant(prisma, "tenant-b");
 
   try {
     const eventA = await prisma.event.create({
@@ -33,7 +30,7 @@ test("GET /tenants/:id/events returns only that tenant's events", async () => {
       },
     });
 
-    const response = await request(app).get(`/tenants/${tenantA.id}/events`);
+    const response = await request(app).get(`/tenants/${tenantA.id}/events`).set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.events.length, 1);
@@ -52,12 +49,10 @@ test("GET /tenants/:id/events returns only that tenant's events", async () => {
 });
 
 test("GET /tenants/:id/events returns an empty list for a tenant with no events", async () => {
-  const tenant = await prisma.tenant.create({
-    data: { name: `empty-tenant-${randomUUID()}` },
-  });
+  const { tenant, authorization } = await createTestTenant(prisma, "empty-tenant");
 
   try {
-    const response = await request(app).get(`/tenants/${tenant.id}/events`);
+    const response = await request(app).get(`/tenants/${tenant.id}/events`).set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data.events, []);
@@ -69,7 +64,9 @@ test("GET /tenants/:id/events returns an empty list for a tenant with no events"
 });
 
 test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
-  const response = await request(app).get(`/tenants/${randomUUID()}/events`);
+  const { tenant, authorization } = await createTestTenant(prisma, "known-tenant");
+  const response = await request(app).get(`/tenants/${randomUUID()}/events`).set("authorization", authorization);
+  await prisma.tenant.deleteMany({ where: { id: tenant.id } });
 
   assert.equal(response.status, 404);
   assert.equal(response.body.error.code, "TENANT_NOT_FOUND");

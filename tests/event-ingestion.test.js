@@ -6,13 +6,10 @@ import request from "supertest";
 import app from "../src/app.js";
 import { prisma } from "../src/db/prisma.js";
 import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
+import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("POST /tenants/:id/events creates an event and durable delivery", async () => {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `event-test-${randomUUID()}`,
-    },
-  });
+  const { tenant, authorization } = await createTestTenant(prisma, "event-test");
 
   const endpoint = await prisma.webhookEndpoint.create({
     data: {
@@ -32,7 +29,7 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
   let eventId;
 
   try {
-    const response = await request(app).post(`/tenants/${tenant.id}/events`).send(eventData);
+    const response = await request(app).post(`/tenants/${tenant.id}/events`).set("authorization", authorization).send(eventData);
 
     assert.equal(response.status, 201);
     assert.equal(response.body.data.tenantId, tenant.id);
@@ -69,8 +66,10 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
 });
 
 test("POST /tenants/:id/events returns 404 for an unknown tenant", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "known-tenant");
   const response = await request(app)
     .post(`/tenants/${randomUUID()}/events`)
+    .set("authorization", authorization)
     .send({
       eventType: "user.created",
       payload: { userId: "user-123" },
@@ -78,18 +77,16 @@ test("POST /tenants/:id/events returns 404 for an unknown tenant", async () => {
 
   assert.equal(response.status, 404);
   assert.equal(response.body.error.code, "TENANT_NOT_FOUND");
+  await prisma.tenant.deleteMany({ where: { id: tenant.id } });
 });
 
 test("POST /tenants/:id/events rejects a missing event type", async () => {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `event-test-${randomUUID()}`,
-    },
-  });
+  const { tenant, authorization } = await createTestTenant(prisma, "event-test");
 
   try {
     const response = await request(app)
       .post(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization)
       .send({
         payload: { userId: "user-123" },
       });
@@ -104,14 +101,10 @@ test("POST /tenants/:id/events rejects a missing event type", async () => {
 });
 
 test("POST /tenants/:id/events rejects a non-object payload", async () => {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `event-test-${randomUUID()}`,
-    },
-  });
+  const { tenant, authorization } = await createTestTenant(prisma, "event-test");
 
   try {
-    const response = await request(app).post(`/tenants/${tenant.id}/events`).send({
+    const response = await request(app).post(`/tenants/${tenant.id}/events`).set("authorization", authorization).send({
       eventType: "user.created",
       payload: "not-an-object",
     });
