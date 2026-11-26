@@ -5,6 +5,8 @@ import { prisma } from "./db/prisma.js";
 import { publishEvent } from "./kafka/event-producer.js";
 import { generateApiKey, hashApiKey } from "./security/api-key.js";
 import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
+import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
+import { eventQueue } from "./queue/event-queue.js";
 
 const app = express();
 
@@ -70,6 +72,12 @@ app.post("/tenants", async (req, res) => {
 });
 
 app.use("/tenants/:id", requireTenantApiKey);
+
+const tenantRateLimiter = createTenantRateLimiter({
+  getRedisClient: () => eventQueue.client,
+});
+
+app.use("/tenants/:id", tenantRateLimiter);
 
 app.get("/tenants/:id", async (req, res) => {
   const { id } = req.params;
