@@ -41,7 +41,7 @@ model Event {
   deliveries WebhookDelivery[]
   outbox    EventOutbox?
 
-  @@index([tenantId, createdAt])
+  @@index([tenantId, createdAt, id])
 }
 
 model EventOutbox {
@@ -58,6 +58,7 @@ model EventOutbox {
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([status, nextAttemptAt])
+  @@index([status, updatedAt])
 }
 
 model WebhookEndpoint {
@@ -93,5 +94,7 @@ model WebhookDelivery {
 
   @@unique([eventId, endpointId])
   @@index([status, nextAttemptAt])
+  @@index([status, updatedAt])
+  @@index([eventId, createdAt, id])
   @@index([endpointId, createdAt])
 }
