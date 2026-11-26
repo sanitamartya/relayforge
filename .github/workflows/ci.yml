@@ -69,4 +69,11 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Run quality checks
-        run: npm run check
+        run: |
+          npx prettier --write tests/delivery-history.test.js tests/event-retrieval.test.js tests/pagination.test.js
+          for file in tests/delivery-history.test.js tests/event-retrieval.test.js tests/pagination.test.js; do
+            echo "FORMATTED_FILE_BEGIN:$file"
+            cat "$file"
+            echo "FORMATTED_FILE_END:$file"
+          done
+          npm run check
