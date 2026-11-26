@@ -5,7 +5,10 @@ import { sendWebhookRequest } from "../security/webhook-url.js";
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_ERROR_LENGTH = 1000;
 
-export async function processDelivery(\n  deliveryId,\n  { sendRequest = sendWebhookRequest } = {},\n) {
+export async function processDelivery(
+  deliveryId,
+  { sendRequest = sendWebhookRequest } = {},
+) {
   const delivery = await prisma.webhookDelivery.findUnique({
     where: { id: deliveryId },
     include: {
