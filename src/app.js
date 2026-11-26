@@ -6,7 +6,6 @@ import { publishEvent } from "./kafka/event-producer.js";
 import { generateApiKey, hashApiKey } from "./security/api-key.js";
 import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
-import { eventQueue } from "./queue/event-queue.js";
 import { rateLimitRedis } from "./queue/rate-limit-redis.js";
 
 const app = express();
@@ -309,6 +308,8 @@ app.use((req, res) => {
   return sendError(res, 404, "NOT_FOUND", "Route not found");
 });
 
+// Express requires four parameters to register error-handling middleware.
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err?.type === "entity.too.large") {
     return sendError(res, 413, "PAYLOAD_TOO_LARGE", "Request body must not exceed 1 MB");
