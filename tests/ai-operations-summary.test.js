@@ -39,7 +39,20 @@ test("Ollama provider sends a non-streaming chat request and returns its text", 
   assert.equal(result, "Three deliveries are pending.");
 });
 
-test("operations facts preserve the full recent failure count", () => {\n  const facts = buildOperationsFacts({\n    statusCounts: { FAILED: 7 },\n    totalDeliveries: 7,\n    recentFailureCount: 7,\n    recentFailures: [],\n    generatedAt: new Date("2026-01-01T00:00:00.000Z"),\n  });\n\n  assert.equal(facts.recentFailureCount, 7);\n  assert.equal(facts.deliveryCounts.FAILED, 7);\n});\n\ntest("failure reason sanitizer removes credentials and webhook URLs", () => {
+test("operations facts preserve the full recent failure count", () => {
+  const facts = buildOperationsFacts({
+    statusCounts: { FAILED: 7 },
+    totalDeliveries: 7,
+    recentFailureCount: 7,
+    recentFailures: [],
+    generatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  });
+
+  assert.equal(facts.recentFailureCount, 7);
+  assert.equal(facts.deliveryCounts.FAILED, 7);
+});
+
+test("failure reason sanitizer removes credentials and webhook URLs", () => {
   const sanitized = sanitizeFailureReason(
     "Request failed for https://customer.example/hook?token=secret Bearer abc123",
   );
@@ -58,6 +71,9 @@ test("tenant operations summary is authenticated and returns tenant-scoped deliv
   assert.equal(tenantResponse.status, 201);
   const tenantId = tenantResponse.body.data.id;
   const authorization = `Bearer ${tenantResponse.body.data.apiKey}`;
+
+  const previousProvider = process.env.AI_PROVIDER;
+  process.env.AI_PROVIDER = "test-unavailable";
 
   try {
     const unauthenticated = await request(app).get(
@@ -104,6 +120,11 @@ test("tenant operations summary is authenticated and returns tenant-scoped deliv
     assert.equal("endpointUrl" in response.body.data.facts.recentFailures[0], false);
     assert.match(response.body.data.assistant.text, /1 webhook deliveries|1 delivery/);
   } finally {
+    if (previousProvider === undefined) {
+      delete process.env.AI_PROVIDER;
+    } else {
+      process.env.AI_PROVIDER = previousProvider;
+    }
     await prisma.tenant.deleteMany({
       where: {
         id: tenantId,
