@@ -28,7 +28,11 @@ async function runOutboxPublisher() {
       logger.warn("kafka_outbox_batch_deferred", { deferred: result.deferred });
     }
   } catch (error) {
-    recordBackgroundOperation({ component: "kafka_outbox", operation: "poll", outcome: "error" });
+    recordBackgroundOperation({
+      component: "kafka_outbox",
+      operation: "poll",
+      outcome: "error",
+    });
     logger.error("kafka_outbox_publisher_failed", { error });
   } finally {
     publishing = false;
@@ -41,7 +45,11 @@ async function startConsumerWithRetry() {
       await startKafkaEventConsumer();
       return;
     } catch (error) {
-      recordBackgroundOperation({ component: "kafka_consumer", operation: "connect", outcome: "retrying" });
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "connect",
+        outcome: "retrying",
+      });
       logger.error("kafka_consumer_start_failed_retrying", { error });
 
       try {
