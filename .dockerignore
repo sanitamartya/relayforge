@@ -1,0 +1,23 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Test and coverage artifacts
+coverage/
+tests/
+
+# Logs and temporary files
+logs/
+*.log
+npm-debug.log*
+
+# Local development files
+.DS_Store
