@@ -80,9 +80,7 @@ export function renderMetrics() {
       `relayforge_http_request_duration_seconds_bucket{${labelSet},le="+Inf"} ${duration.count}`,
     );
     lines.push(`relayforge_http_request_duration_seconds_sum{${labelSet}} ${duration.sum}`);
-    lines.push(
-      `relayforge_http_request_duration_seconds_count{${labelSet}} ${duration.count}`,
-    );
+    lines.push(`relayforge_http_request_duration_seconds_count{${labelSet}} ${duration.count}`);
   }
 
   lines.push(
