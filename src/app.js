@@ -10,6 +10,8 @@ import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
 import { rateLimitRedis } from "./queue/rate-limit-redis.js";
 import { encodePaginationCursor, parsePagination } from "./utils/pagination.js";
+import { createModelProvider } from "./ai/model-provider.js";
+import { getTenantOperationsSummary } from "./services/operations-summary.js";
 
 const app = express();
 
@@ -172,6 +174,19 @@ app.get("/tenants/:id", async (req, res) => {
     name: tenant.name,
     createdAt: tenant.createdAt,
   });
+});
+
+app.get("/tenants/:id/ai/operations-summary", async (req, res) => {
+  const summary = await getTenantOperationsSummary(prisma, req.authTenantId, {
+    generateNarrative: async (facts) => {
+      const provider = createModelProvider();
+      return provider.generate(
+        `Summarize these RelayForge webhook operations facts in 3-5 concise sentences. Report the numbers exactly. Describe only recorded failure details; do not infer causes or suggest that you changed anything.\\n\\n${JSON.stringify(facts, null, 2)}`,
+      );
+    },
+  });
+
+  return sendSuccess(res, 200, summary);
 });
 
 app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
