@@ -249,7 +249,6 @@ async function capturePublicLookup(t) {
   return lookup;
 }
 
-
 test("public lookup rejects a requested IP family with no matching address", async (t) => {
   const lookup = await capturePublicLookup(t);
 
@@ -290,7 +289,6 @@ test("public lookup returns the first address when all is not requested", async 
   assert.equal(result.address, "93.184.216.34");
   assert.equal(result.family, 4);
 });
-
 
 test("public lookup forwards hostname validation and DNS errors to the callback", async (t) => {
   const lookup = await capturePublicLookup(t);
