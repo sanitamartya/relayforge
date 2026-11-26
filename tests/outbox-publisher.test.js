@@ -159,7 +159,10 @@ test("recovers a stale PROCESSING outbox claim", async () => {
     queries[0].where.OR[1].updatedAt.lte.toISOString(),
     "2026-11-26T09:59:30.000Z",
   );
-  assert.equal(updates[0].where.OR[1].updatedAt.lte.toISOString(), "2026-11-26T09:59:30.000Z");
+  assert.equal(
+    updates[0].where.OR[1].updatedAt.lte.toISOString(),
+    "2026-11-26T09:59:30.000Z",
+  );
   assert.deepEqual(updates[0].data.attemptCount, { increment: 1 });
   assert.equal(updates[1].where.attemptCount, 5);
   assert.equal(updates[1].data.status, "PUBLISHED");
