@@ -168,7 +168,7 @@ The assistant uses the Ollama provider by default and does not require a paid mo
    AI_PROVIDER=ollama
    OLLAMA_BASE_URL=http://127.0.0.1:11434
    OLLAMA_MODEL=qwen2.5:3b
-   AI_OPERATIONS_TIMEOUT_MS=2500
+   AI_OPERATIONS_TIMEOUT_MS=30000
    ```
 
 If the local model is unavailable or times out, RelayForge still returns the operational facts and a deterministic summary. Model output is narrative only; the database facts are authoritative and the assistant cannot perform actions.
