@@ -60,7 +60,7 @@ test("operations facts preserve the full recent failure count", () => {
 
 test("failure reason sanitizer removes credentials and webhook URLs", () => {
   const sanitized = sanitizeFailureReason(
-    "Request failed for https://customer.example/hook?token=secret Bearer abc123",
+    "Failed https://customer.example/hook?token=secret Bearer abc123",
   );
 
   assert.equal(sanitized.includes("customer.example"), false);
@@ -70,7 +70,7 @@ test("failure reason sanitizer removes credentials and webhook URLs", () => {
 });
 
 test(
-  "tenant operations summary is authenticated and returns tenant-scoped delivery facts",
+  "tenant operations summary is authenticated and tenant-scoped",
   async () => {
     const tenantResponse = await request(app).post("/tenants").send({
       name: "ai-operations-summary-test",
