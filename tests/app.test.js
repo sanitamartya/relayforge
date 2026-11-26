@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import request from "supertest";
 
 import app from "../src/app.js";
+import { prisma } from "../src/db/prisma.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 
 test("GET /health returns a successful health response", async () => {
@@ -63,4 +64,5 @@ test("Unknown routes return a JSON 404 response", async () => {
 
 after(async () => {
   await eventQueue.close();
+  await prisma.$disconnect();
 });
