@@ -7,6 +7,7 @@ import { generateApiKey, hashApiKey } from "./security/api-key.js";
 import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
 import { eventQueue } from "./queue/event-queue.js";
+import { rateLimitRedis } from "./queue/rate-limit-redis.js";
 
 const app = express();
 
@@ -74,7 +75,7 @@ app.post("/tenants", async (req, res) => {
 app.use("/tenants/:id", requireTenantApiKey);
 
 const tenantRateLimiter = createTenantRateLimiter({
-  getRedisClient: () => eventQueue.connection.client,
+  getRedisClient: () => rateLimitRedis,
 });
 
 app.use("/tenants/:id", tenantRateLimiter);
