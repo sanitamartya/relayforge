@@ -43,6 +43,10 @@ The assistant is read-only. It must not retry deliveries, create or modify webho
 - No paid model API is required.
 - Model output is a narrative; returned database facts remain authoritative.
 
+## Observability
+
+Model generation success and unavailability are recorded in `relayforge_background_operations_total` with component `ai-assistant` and operation `generate_narrative`. Prompts and model responses are not logged.
+
 ## Success criteria
 
-A tenant can request an operations summary and receive accurate, tenant-scoped facts with an optional local-model explanation.
+A tenant can request an operations summary or ask a bounded natural-language question and receive accurate, tenant-scoped facts with an optional local-model explanation. Model errors degrade to deterministic output without exposing provider error details.
