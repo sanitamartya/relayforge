@@ -1,13 +1,16 @@
-/* global setInterval, clearInterval */
+/* global setInterval, clearInterval, setTimeout */
 import { prisma } from "../db/prisma.js";
 import { eventQueue } from "../queue/event-queue.js";
 import { publishOutboxBatch } from "../kafka/outbox-publisher.js";
+import { disconnectKafkaProducer } from "../kafka/event-producer.js";
 import { startKafkaEventConsumer, stopKafkaEventConsumer } from "../kafka/event-consumer.js";
 
 const OUTBOX_POLL_INTERVAL_MS = 1000;
+const CONSUMER_RETRY_INTERVAL_MS = 5000;
 
 let shuttingDown = false;
 let publishing = false;
+let outboxInterval;
 
 async function runOutboxPublisher() {
   if (publishing || shuttingDown) {
@@ -29,7 +32,24 @@ async function runOutboxPublisher() {
   }
 }
 
-let outboxInterval;
+async function startConsumerWithRetry() {
+  while (!shuttingDown) {
+    try {
+      await startKafkaEventConsumer();
+      return;
+    } catch (error) {
+      console.error("Kafka consumer failed to start; retrying:", error.message);
+
+      try {
+        await stopKafkaEventConsumer();
+      } catch {
+        // A failed initial connection may not have an active consumer session.
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, CONSUMER_RETRY_INTERVAL_MS));
+    }
+  }
+}
 
 async function shutdown() {
   if (shuttingDown) {
@@ -46,6 +66,7 @@ async function shutdown() {
 
   try {
     await stopKafkaEventConsumer();
+    await disconnectKafkaProducer();
     await eventQueue.close();
     await prisma.$disconnect();
 
@@ -60,12 +81,10 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-try {
-  await startKafkaEventConsumer();
-  await runOutboxPublisher();
-  outboxInterval = setInterval(runOutboxPublisher, OUTBOX_POLL_INTERVAL_MS);
-  outboxInterval.unref();
-} catch (error) {
-  console.error("Kafka event worker failed to start:", error);
-  await shutdown();
-}
+// Keep the publisher alive through Kafka outages; publication failures stay in
+// PostgreSQL and are retried by the outbox scheduler.
+await runOutboxPublisher();
+outboxInterval = setInterval(runOutboxPublisher, OUTBOX_POLL_INTERVAL_MS);
+outboxInterval.unref();
+
+void startConsumerWithRetry();
