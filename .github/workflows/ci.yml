@@ -68,5 +68,9 @@ jobs:
       - name: Apply database migrations
         run: npx prisma migrate deploy
 
+      - name: Show exact Prettier changes for AI assistant tests
+        run: |
+          npx prettier tests/ai-operations-summary.test.js > /tmp/ai-operations-summary.formatted.js
+          diff -u tests/ai-operations-summary.test.js /tmp/ai-operations-summary.formatted.js || true
       - name: Run quality checks
         run: npm run check
