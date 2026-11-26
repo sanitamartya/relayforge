@@ -1,10 +1,11 @@
-/* global fetch, AbortSignal */
+/* global AbortSignal */
 import { prisma } from "../db/prisma.js";
+import { sendWebhookRequest } from "../security/webhook-url.js";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_ERROR_LENGTH = 1000;
 
-export async function processDelivery(deliveryId) {
+export async function processDelivery(deliveryId, { sendRequest = sendWebhookRequest } = {}) {
   const delivery = await prisma.webhookDelivery.findUnique({
     where: { id: deliveryId },
     include: {
@@ -56,7 +57,7 @@ export async function processDelivery(deliveryId) {
   let statusCode = null;
 
   try {
-    const response = await fetch(delivery.endpoint.url, {
+    const response = await sendRequest(delivery.endpoint.url, {
       method: "POST",
       headers: {
         "content-type": "application/json",
