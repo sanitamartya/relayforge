@@ -193,7 +193,7 @@ app.post("/tenants/:id/ai/ask", async (req, res) => {
     generateNarrative: async (facts) => {
       const provider = createModelProvider();
       return provider.generate(
-        `Answer the user's question using only these RelayForge operations facts. If the facts do not answer the question, say what information is missing. Do not infer causes from status codes alone.\\n\\nQuestion: ${normalizedQuestion}\\n\\nOperational facts:\\n${JSON.stringify(facts, null, 2)}`,
+        `Answer the user's question using only these RelayForge operations facts. If the facts do not answer the question, say what information is missing. Do not infer causes from status codes alone.\n\nQuestion: ${normalizedQuestion}\n\nOperational facts:\n${JSON.stringify(facts, null, 2)}`,
       );
     },
   });
