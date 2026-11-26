@@ -93,10 +93,7 @@ export async function publishOutboxBatch({
 
       published += 1;
     } catch (error) {
-      const retryDelayMs = Math.min(
-        MAX_RETRY_DELAY_MS,
-        1000 * 2 ** Math.min(attemptCount - 1, 8),
-      );
+      const retryDelayMs = Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** Math.min(attemptCount - 1, 8));
 
       await db.eventOutbox.updateMany({
         where: {
