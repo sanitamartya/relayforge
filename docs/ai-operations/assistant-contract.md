@@ -1,4 +1,4 @@
-# AI Operations Assistant — Initial Capability
+# AI Operations Assistant
 
 ## Goal
 
