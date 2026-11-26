@@ -96,11 +96,17 @@ function ipv6ToBigInt(address) {
       ? [...left, ...Array(missingGroups).fill("0"), ...right]
       : left;
 
-  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {
+  if (
+    groups.length !== 8 ||
+    groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))
+  ) {
     return null;
   }
 
-  return groups.reduce((value, group) => (value << 16n) | BigInt(parseInt(group, 16)), 0n);
+  return groups.reduce(
+    (value, group) => (value << 16n) | BigInt(parseInt(group, 16)),
+    0n,
+  );
 }
 
 function isInCidr(addressValue, cidr, parseAddress) {
@@ -255,7 +261,6 @@ export function sendWebhookRequest(url, options = {}) {
       {
         method: options.method ?? "POST",
         headers: options.headers,
-        body: options.body,
         signal: options.signal,
         agent: false,
         lookup: createPublicLookup(),
