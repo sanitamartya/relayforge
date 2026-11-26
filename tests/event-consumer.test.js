@@ -36,7 +36,7 @@ function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "deliv
     logger: {
       warn: (message) => calls.warnings.push(message),
       error: (message) => calls.errors.push(message),
-      log: (message) => calls.logs.push(message),
+      info: (message, fields) => calls.logs.push({ message, fields }),
     },
   });
 
@@ -97,7 +97,7 @@ test("Kafka message handler ignores invalid JSON", async () => {
 
   await handler({ message: { value: Buffer.from("{invalid-json") } });
 
-  assert.deepEqual(calls.errors, ["Kafka message contains invalid JSON"]);
+  assert.deepEqual(calls.warnings, ["kafka_message_invalid_json"]);
   assert.equal(calls.findMany.length, 0);
   assert.equal(calls.add.length, 0);
 });
@@ -111,7 +111,7 @@ test("Kafka message handler ignores events with invalid IDs", async () => {
     },
   });
 
-  assert.deepEqual(calls.errors, ["Kafka event contains an invalid UUID event ID"]);
+  assert.deepEqual(calls.warnings, ["kafka_event_invalid_id"]);
   assert.equal(calls.findMany.length, 0);
   assert.equal(calls.add.length, 0);
 });
@@ -140,7 +140,7 @@ test("Kafka message handler queues pending deliveries for a valid event", async 
     { deliveryId: "delivery-2" },
     { attempts: 3, jobId: "delivery-2" },
   ]);
-  assert.deepEqual(calls.logs, ["Kafka event " + validEventId + ": queued 2 deliveries"]);
+  assert.deepEqual(calls.logs, [\n    { message: "kafka_event_deliveries_queued", fields: { eventId: validEventId, deliveryCount: 2 } },\n  ]);
 });
 
 test("Kafka message handler does not queue when no pending deliveries exist", async () => {
@@ -154,7 +154,7 @@ test("Kafka message handler does not queue when no pending deliveries exist", as
 
   assert.equal(calls.findMany.length, 1);
   assert.equal(calls.add.length, 0);
-  assert.deepEqual(calls.logs, ["Kafka event " + validEventId + ": queued 0 deliveries"]);
+  assert.deepEqual(calls.logs, [\n    { message: "kafka_event_deliveries_queued", fields: { eventId: validEventId, deliveryCount: 0 } },\n  ]);
 });
 
 test("Kafka message handler propagates database errors", async () => {
@@ -176,7 +176,7 @@ test("Kafka message handler propagates database errors", async () => {
     logger: {
       warn: () => {},
       error: () => {},
-      log: () => {},
+      info: () => {},
     },
   });
 
