@@ -133,8 +133,6 @@ test("resolvePublicWebhookAddresses rejects a single non-public DNS answer", asy
   );
 });
 
-
-
 test("sendWebhookRequest sends the configured HTTP request and reports a 2xx response", async (t) => {
   let capturedUrl;
   let capturedOptions;
