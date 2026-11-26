@@ -5,6 +5,7 @@ import {
   isPublicIpAddress,
   parseWebhookUrl,
   resolvePublicWebhookAddresses,
+  sendWebhookRequest,
 } from "../src/security/webhook-url.js";
 
 test("isPublicIpAddress accepts globally routable IPv4 and IPv6", () => {
@@ -63,6 +64,13 @@ test("parseWebhookUrl rejects local hostnames and private IP literals", () => {
   for (const url of blockedUrls) {
     assert.throws(() => parseWebhookUrl(url), /local or reserved|non-public/);
   }
+});
+
+test("sendWebhookRequest rejects a private IP before connecting", async () => {
+  await assert.rejects(
+    sendWebhookRequest("http://127.0.0.1:8080/webhook"),
+    /non-public IP address/,
+  );
 });
 
 test("resolvePublicWebhookAddresses accepts public DNS answers", async () => {
