@@ -30,10 +30,13 @@ Client
   v
 Express API -------> PostgreSQL
   |                    | Tenant / Event / Endpoint / Delivery
-  |
-  | Event published
-  v
-Kafka topic
+  |                    | EventOutbox (same transaction)
+  |                    v
+  |              Outbox publisher
+  |                    |
+  |                    | retryable publish
+  |                    v
+  +----------------> Kafka topic
   |
   v
 Kafka consumer -------> Redis / BullMQ
@@ -50,7 +53,7 @@ Kafka consumer -------> Redis / BullMQ
                     PostgreSQL delivery result
 ```
 
-The API persists the event, its initial delivery records, and its outbox publication intent in one PostgreSQL transaction. A separate publisher in the Kafka worker reads the outbox and retries transient publication failures with exponential backoff. This avoids losing the publication intent when Kafka is unavailable after the API transaction commits. The publisher uses at-least-once delivery: a crash after Kafka accepts a message but before the outbox is marked published can cause a duplicate message. The Kafka consumer finds durable delivery records and enqueues jobs using delivery IDs; the delivery processor atomically claims each database delivery so duplicate messages do not normally cause concurrent duplicate sends.
+The API persists the event, its initial delivery records, and its outbox publication intent in one PostgreSQL transaction. A separate publisher in the Kafka worker reads the outbox and retries transient publication failures with exponential backoff. This avoids losing the publication intent when Kafka is unavailable after the API transaction commits. The publisher uses at-least-once delivery: a crash after Kafka accepts a message but before the outbox is marked published can cause a duplicate message. The Kafka worker keeps retrying the consumer connection after startup failures and continues polling the outbox during broker outages. The Kafka consumer finds durable delivery records and enqueues jobs using delivery IDs; the delivery processor atomically claims each database delivery so duplicate messages do not normally cause concurrent duplicate sends.
 
 The delivery worker can retry failed jobs according to the queue's retry policy. The dispatcher also periodically recovers pending deliveries and stale processing records.
 
