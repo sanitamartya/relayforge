@@ -37,7 +37,11 @@ test("pagination cursor round-trips a record ID and timestamp", () => {
 });
 
 test("pagination rejects malformed cursors", () => {
-  for (const cursor of ["invalid", "", "e30", Buffer.from(JSON.stringify({ id: "bad", createdAt: "bad" })).toString("base64url")]) {
+  const invalidCursor = Buffer.from(
+    JSON.stringify({ id: "bad", createdAt: "bad" }),
+  ).toString("base64url");
+
+  for (const cursor of ["invalid", "", "e30", invalidCursor]) {
     assert.equal(parsePagination({ cursor }).error, "cursor is invalid");
   }
 });
