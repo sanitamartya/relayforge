@@ -17,7 +17,13 @@ export function sanitizeFailureReason(value) {
     .slice(0, FAILURE_REASON_MAX_LENGTH);
 }
 
-export function buildOperationsFacts({ statusCounts, totalDeliveries, recentFailures, generatedAt }) {
+export function buildOperationsFacts({
+  statusCounts,
+  totalDeliveries,
+  recentFailureCount,
+  recentFailures,
+  generatedAt,
+}) {
   const counts = Object.fromEntries(
     DELIVERY_STATUSES.map((status) => [status, statusCounts[status] || 0]),
   );
@@ -117,6 +123,7 @@ export async function getTenantOperationsSummary(
   const facts = buildOperationsFacts({
     statusCounts,
     totalDeliveries,
+    recentFailureCount,
     recentFailures,
     generatedAt: now,
   });
