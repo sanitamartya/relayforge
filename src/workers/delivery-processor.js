@@ -109,7 +109,7 @@ export async function processDelivery(deliveryId, { sendRequest = sendWebhookReq
       deliveryId,
     };
   } catch (error) {
-    const message = String(error.message || error).slice(0, MAX_ERROR_LENGTH);
+    const message = String(error?.message || error).slice(0, MAX_ERROR_LENGTH);
 
     // BullMQ uses exponential backoff between retry attempts.
     const retryDelayMs = 1000 * 2 ** (attemptCount - 1);
