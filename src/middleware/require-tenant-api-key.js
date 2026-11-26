@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { prisma } from "../db/prisma.js";
 import { hashApiKey } from "../security/api-key.js";
 
@@ -12,7 +13,7 @@ function sendAuthenticationError(res) {
 
 export async function requireTenantApiKey(req, res, next) {
   const authorization = req.get("authorization");
-  const match = authorization?.match(/^Bearer\s+(\S+)$/i);
+  const match = authorization?.match(/^Bearer\\s+(\\S+)$/i);
   const apiKey = match?.[1];
 
   if (!apiKey || apiKey.length > 200) {
@@ -20,25 +21,34 @@ export async function requireTenantApiKey(req, res, next) {
   }
 
   const tenant = await prisma.tenant.findUnique({
-    where: {
-      apiKeyHash: hashApiKey(apiKey),
-    },
+    where: { id: req.params.id },
     select: {
       id: true,
+      apiKeyHash: true,
     },
   });
 
   if (!tenant) {
+    return res.status(404).json({
+      error: {
+        code: "TENANT_NOT_FOUND",
+        message: "Tenant not found",
+      },
+    });
+  }
+
+  if (!tenant.apiKeyHash) {
     return sendAuthenticationError(res);
   }
 
-  if (tenant.id !== req.params.id) {
-    return res.status(403).json({
-      error: {
-        code: "TENANT_ACCESS_DENIED",
-        message: "This API key cannot access the requested tenant",
-      },
-    });
+  const expectedHash = Buffer.from(tenant.apiKeyHash, "hex");
+  const providedHash = Buffer.from(hashApiKey(apiKey), "hex");
+
+  if (
+    expectedHash.length !== providedHash.length ||
+    !timingSafeEqual(expectedHash, providedHash)
+  ) {
+    return sendAuthenticationError(res);
   }
 
   req.authTenantId = tenant.id;
