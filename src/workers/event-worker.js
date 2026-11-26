@@ -28,6 +28,7 @@ const worker = new Worker(
 
 worker.on("completed", (job, result) => {
   const outcome = result?.delivered ? "delivered" : "skipped";
+
   recordBackgroundOperation({
     component: "webhook_delivery",
     operation: "process",
@@ -41,17 +42,36 @@ worker.on("completed", (job, result) => {
 });
 
 worker.on("failed", async (job, error) => {
-  console.error(`Delivery job ${job?.id} failed:`, error.message);
-
   if (!job) {
+    recordBackgroundOperation({
+      component: "webhook_delivery",
+      operation: "process",
+      outcome: "unknown_failure",
+    });
+    logger.error("delivery_job_failed_without_job", { error });
     return;
   }
 
   const maxAttempts = job.opts.attempts ?? 1;
+  const terminalFailure = job.attemptsMade >= maxAttempts;
+
+  recordBackgroundOperation({
+    component: "webhook_delivery",
+    operation: "process",
+    outcome: terminalFailure ? "terminal_failure" : "retrying",
+  });
+  logger.error("delivery_job_failed", {
+    jobId: job.id,
+    deliveryId: job.data.deliveryId,
+    attemptsMade: job.attemptsMade,
+    maxAttempts,
+    terminalFailure,
+    error,
+  });
 
   // BullMQ retries intermediate failures.
   // Only mark the delivery FAILED after the final attempt.
-  if (job.attemptsMade >= maxAttempts) {
+  if (terminalFailure) {
     try {
       await prisma.webhookDelivery.updateMany({
         where: {
@@ -67,7 +87,10 @@ worker.on("failed", async (job, error) => {
         },
       });
     } catch (updateError) {
-      console.error("Could not mark delivery as FAILED:", updateError);
+      logger.error("delivery_mark_failed_update_error", {
+        deliveryId: job.data.deliveryId,
+        error: updateError,
+      });
     }
   }
 });
@@ -130,6 +153,7 @@ async function dispatchPendingDeliveries() {
       },
     );
   }
+  return deliveries.length;
 }
 
 let dispatching = false;
