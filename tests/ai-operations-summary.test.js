@@ -125,17 +125,17 @@ test(
       assert.equal(response.body.data.facts.recentFailureCount, 1);
       assert.equal(response.body.data.facts.recentFailures[0].attemptCount, 3);
       assert.equal(
-      response.body.data.facts.recentFailures[0].lastStatusCode,
-      503,
-    );
+        response.body.data.facts.recentFailures[0].lastStatusCode,
+        503,
+      );
       assert.equal(
-      "endpointUrl" in response.body.data.facts.recentFailures[0],
-      false,
-    );
+        "endpointUrl" in response.body.data.facts.recentFailures[0],
+        false,
+      );
       assert.match(
-      response.body.data.assistant.text,
-      /1 webhook deliveries|1 delivery/,
-    );
+        response.body.data.assistant.text,
+        /1 webhook deliveries|1 delivery/,
+      );
 
       const missingQuestion = await request(app)
         .post(`/tenants/${tenantId}/ai/ask`)
