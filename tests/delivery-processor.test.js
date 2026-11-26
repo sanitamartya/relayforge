@@ -161,8 +161,8 @@ test("concurrent processing sends only one request for a delivery", async () => 
 
   try {
     const results = await Promise.all([
-      processDelivery(testData.deliveryId),
-      processDelivery(testData.deliveryId),
+      processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest }),
+      processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest }),
     ]);
 
     assert.equal(requestCount, 1);
