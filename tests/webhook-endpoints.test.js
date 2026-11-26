@@ -71,6 +71,26 @@ test("POST /tenants/:id/webhook-endpoints rejects unsupported protocols", async 
   assert.equal(response.body.error.code, "VALIDATION_ERROR");
 });
 
+test("POST /tenants/:id/webhook-endpoints rejects private IP destinations", async () => {
+  const response = await request(app)
+    .post(`/tenants/${tenantId}/webhook-endpoints`)
+    .set("authorization", authorization)
+    .send({ url: "http://169.254.169.254/latest/meta-data/" });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error.code, "VALIDATION_ERROR");
+});
+
+test("POST /tenants/:id/webhook-endpoints rejects localhost destinations", async () => {
+  const response = await request(app)
+    .post(`/tenants/${tenantId}/webhook-endpoints`)
+    .set("authorization", authorization)
+    .send({ url: "http://localhost:8080/webhook" });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error.code, "VALIDATION_ERROR");
+});
+
 test("POST /tenants/:id/webhook-endpoints rejects URLs with credentials", async () => {
   const response = await request(app)
     .post(`/tenants/${tenantId}/webhook-endpoints`)
