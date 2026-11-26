@@ -10,7 +10,7 @@ import { rateLimitRedis } from "../src/queue/rate-limit-redis.js";
 import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
 import { createTestTenant } from "./helpers/tenant-auth.js";
 
-test("POST /tenants/:id/events creates an event and durable delivery", async () => {
+test("POST /tenants/:id/events creates an event, delivery, and outbox record", async () => {
   const { tenant, authorization } = await createTestTenant(prisma, "event-test");
 
   const endpoint = await prisma.webhookEndpoint.create({
@@ -63,6 +63,14 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
     assert.ok(savedDelivery);
     assert.equal(savedDelivery.status, "PENDING");
     assert.equal(savedDelivery.attemptCount, 0);
+
+    const savedOutbox = await prisma.eventOutbox.findUnique({
+      where: { eventId },
+    });
+
+    assert.ok(savedOutbox);
+    assert.equal(savedOutbox.status, "PENDING");
+    assert.equal(savedOutbox.attemptCount, 0);
   } finally {
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
