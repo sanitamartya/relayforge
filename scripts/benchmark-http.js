@@ -34,7 +34,8 @@ const startedAt = performance.now();
 const latencies = [];
 const statusCounts = {};
 let completed = 0;
-let failed = 0;
+let networkErrors = 0;
+let nonSuccessResponses = 0;
 
 async function runWorker() {
   while (performance.now() < deadline) {
@@ -52,8 +53,12 @@ async function runWorker() {
       latencies.push(performance.now() - requestStarted);
       completed += 1;
       statusCounts[response.status] = (statusCounts[response.status] ?? 0) + 1;
+
+      if (!response.ok) {
+        nonSuccessResponses += 1;
+      }
     } catch {
-      failed += 1;
+      networkErrors += 1;
     }
   }
 }
@@ -84,7 +89,8 @@ console.log(
       durationSeconds: Number(elapsedSeconds.toFixed(2)),
       concurrency,
       completedRequests: completed,
-      failedRequests: failed,
+      networkErrors,
+      nonSuccessResponses,
       requestsPerSecond: Number((completed / elapsedSeconds).toFixed(2)),
       statusCounts,
       latencyMs: {
