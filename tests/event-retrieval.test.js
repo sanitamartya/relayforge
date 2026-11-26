@@ -54,7 +54,7 @@ test("GET /tenants/:id/events returns only that tenant's events", async () => {
   }
 });
 
-test("GET events returns an empty list for a tenant without events", async () => {
+test("GET events returns an empty page", async () => {
   const { tenant, authorization } = await createTestTenant(
     prisma,
     "empty-tenant",
