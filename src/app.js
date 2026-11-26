@@ -1,5 +1,5 @@
 import express from "express";
-import { URL } from "node:url";
+import { parseWebhookUrl } from "./security/webhook-url.js";
 import { prisma } from "./db/prisma.js";
 // Event delivery is queued by the Kafka consumer.
 import { publishEvent } from "./kafka/event-producer.js";
@@ -94,23 +94,9 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   let parsedUrl;
 
   try {
-    parsedUrl = new URL(url.trim());
-  } catch {
-    return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL must be a valid URL");
-  }
-
-  if (
-    !["http:", "https:"].includes(parsedUrl.protocol) ||
-    !parsedUrl.hostname ||
-    parsedUrl.username ||
-    parsedUrl.password
-  ) {
-    return sendError(
-      res,
-      400,
-      "VALIDATION_ERROR",
-      "Webhook URL must use HTTP or HTTPS and cannot contain credentials",
-    );
+    parsedUrl = parseWebhookUrl(url);
+  } catch (error) {
+    return sendError(res, 400, "VALIDATION_ERROR", error.message);
   }
 
   const endpoint = await prisma.webhookEndpoint.create({
