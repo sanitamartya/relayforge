@@ -1,14 +1,21 @@
 import { getValidEventId } from "./event-id.js";
+import { logger as structuredLogger } from "../observability/logger.js";
+import { recordBackgroundOperation } from "../observability/metrics.js";
 
 export function createKafkaEventMessageHandler({
   prisma,
   eventQueue,
   deliveryJobOptions,
-  logger = console,
+  logger = structuredLogger,
 }) {
   return async ({ message }) => {
     if (!message?.value) {
-      logger.warn("Kafka message has no value");
+      logger.warn("kafka_message_missing_value");
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "handle_message",
+        outcome: "invalid_message",
+      });
       return;
     }
 
@@ -16,42 +23,71 @@ export function createKafkaEventMessageHandler({
 
     try {
       event = JSON.parse(message.value.toString());
-    } catch {
-      logger.error("Kafka message contains invalid JSON");
+    } catch (error) {
+      logger.warn("kafka_message_invalid_json", { error });
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "handle_message",
+        outcome: "invalid_message",
+      });
       return;
     }
 
     const eventId = getValidEventId(event);
 
     if (!eventId) {
-      logger.error("Kafka event contains an invalid UUID event ID");
+      logger.warn("kafka_event_invalid_id");
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "handle_message",
+        outcome: "invalid_event",
+      });
       return;
     }
 
-    const deliveries = await prisma.webhookDelivery.findMany({
-      where: {
+    try {
+      const deliveries = await prisma.webhookDelivery.findMany({
+        where: {
+          eventId,
+          status: "PENDING",
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      for (const delivery of deliveries) {
+        await eventQueue.add(
+          "deliver-webhook",
+          {
+            deliveryId: delivery.id,
+          },
+          {
+            ...deliveryJobOptions,
+            jobId: delivery.id,
+          },
+        );
+      }
+
+      const outcome = deliveries.length > 0 ? "queued" : "no_pending_deliveries";
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "queue_deliveries",
+        outcome,
+      });
+      logger.info("kafka_event_deliveries_queued", {
         eventId,
-        status: "PENDING",
-        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    for (const delivery of deliveries) {
-      await eventQueue.add(
-        "deliver-webhook",
-        {
-          deliveryId: delivery.id,
-        },
-        {
-          ...deliveryJobOptions,
-          jobId: delivery.id,
-        },
-      );
+        deliveryCount: deliveries.length,
+      });
+    } catch (error) {
+      recordBackgroundOperation({
+        component: "kafka_consumer",
+        operation: "handle_message",
+        outcome: "error",
+      });
+      logger.error("kafka_event_processing_failed", { eventId, error });
+      throw error;
     }
-
-    logger.log(`Kafka event ${eventId}: queued ${deliveries.length} deliveries`);
   };
 }
