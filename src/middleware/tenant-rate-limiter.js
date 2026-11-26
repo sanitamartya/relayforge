@@ -2,6 +2,7 @@ import "dotenv/config";
 
 const DEFAULT_LIMIT = 100;
 const DEFAULT_WINDOW_MS = 60_000;
+const DEFAULT_REDIS_TIMEOUT_MS = 1_500;
 
 function readPositiveInteger(name, fallback) {
   const value = process.env[name];
@@ -15,6 +16,10 @@ function readPositiveInteger(name, fallback) {
 
 const configuredLimit = readPositiveInteger("TENANT_RATE_LIMIT_MAX", DEFAULT_LIMIT);
 const configuredWindowMs = readPositiveInteger("TENANT_RATE_LIMIT_WINDOW_MS", DEFAULT_WINDOW_MS);
+const configuredRedisTimeoutMs = readPositiveInteger(
+  "TENANT_RATE_LIMIT_REDIS_TIMEOUT_MS",
+  DEFAULT_REDIS_TIMEOUT_MS,
+);
 
 const incrementTenantWindowScript = `
 local time = redis.call("TIME")
@@ -34,12 +39,16 @@ export function createTenantRateLimiter({
   getRedisClient,
   limit = configuredLimit,
   windowMs = configuredWindowMs,
+  redisTimeoutMs = configuredRedisTimeoutMs,
 }) {
   if (!Number.isSafeInteger(limit) || limit <= 0) {
     throw new Error("Rate limit must be a positive integer");
   }
   if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
     throw new Error("Rate limit window must be a positive integer");
+  }
+  if (!Number.isSafeInteger(redisTimeoutMs) || redisTimeoutMs <= 0) {
+    throw new Error("Redis timeout must be a positive integer");
   }
 
   return async function tenantRateLimiter(req, res, next) {
@@ -55,13 +64,23 @@ export function createTenantRateLimiter({
 
     try {
       const redis = await getRedisClient();
-      const result = await redis.eval(
-        incrementTenantWindowScript,
-        1,
-        `relayforge:rate-limit:tenant:${tenantId}`,
-        limit,
-        windowMs,
-      );
+      let timeout;
+      const result = await Promise.race([
+        redis.eval(
+          incrementTenantWindowScript,
+          1,
+          `relayforge:rate-limit:tenant:${tenantId}`,
+          limit,
+          windowMs,
+        ),
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("Redis rate-limit command timed out")),
+            redisTimeoutMs,
+          );
+          timeout.unref?.();
+        }),
+      ]).finally(() => clearTimeout(timeout));
       const [count, resetMs, nowSeconds] = result.map(Number);
       const retryAfterSeconds = Math.max(1, Math.ceil(resetMs / 1000));
       const remaining = Math.max(0, limit - count);
