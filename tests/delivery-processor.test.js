@@ -76,7 +76,7 @@ test("delivery processor sends HTTP request and marks delivery DELIVERED", async
   const testData = await createTestDelivery(url);
 
   try {
-    const result = await processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest });
+    const result = await processDelivery(testData.deliveryId, {\n      sendRequest: sendLocalRequest,\n    });
 
     assert.equal(result.delivered, true);
     assert.equal(result.statusCode, 204);
@@ -120,7 +120,7 @@ test("delivery processor records an HTTP failure for retry", async () => {
 
   try {
     await assert.rejects(
-      processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest }),
+      processDelivery(testData.deliveryId, {\n        sendRequest: sendLocalRequest,\n      }),
       /Webhook endpoint returned HTTP 503/,
     );
 
