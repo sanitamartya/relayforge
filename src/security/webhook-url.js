@@ -58,10 +58,7 @@ function ipv4ToBigInt(address) {
     return null;
   }
 
-  return octets.reduce(
-    (value, octet) => (value << 8n) | BigInt(octet),
-    0n,
-  );
+  return octets.reduce((value, octet) => (value << 8n) | BigInt(octet), 0n);
 }
 
 function ipv6ToBigInt(address) {
@@ -99,17 +96,11 @@ function ipv6ToBigInt(address) {
       ? [...left, ...Array(missingGroups).fill("0"), ...right]
       : left;
 
-  if (
-    groups.length !== 8 ||
-    groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))
-  ) {
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {
     return null;
   }
 
-  return groups.reduce(
-    (value, group) => (value << 16n) | BigInt(parseInt(group, 16)),
-    0n,
-  );
+  return groups.reduce((value, group) => (value << 16n) | BigInt(parseInt(group, 16)), 0n);
 }
 
 function isInCidr(addressValue, cidr, parseAddress) {
@@ -134,9 +125,7 @@ export function isPublicIpAddress(address) {
   if (version === 4) {
     const value = ipv4ToBigInt(normalized);
 
-    return !IPV4_BLOCKED_CIDRS.some((cidr) =>
-      isInCidr(value, cidr, ipv4ToBigInt),
-    );
+    return !IPV4_BLOCKED_CIDRS.some((cidr) => isInCidr(value, cidr, ipv4ToBigInt));
   }
 
   if (version === 6) {
@@ -146,9 +135,7 @@ export function isPublicIpAddress(address) {
       return false;
     }
 
-    return !IPV6_BLOCKED_CIDRS.some((cidr) =>
-      isInCidr(value, cidr, ipv6ToBigInt),
-    );
+    return !IPV6_BLOCKED_CIDRS.some((cidr) => isInCidr(value, cidr, ipv6ToBigInt));
   }
 
   return false;
@@ -199,10 +186,7 @@ export function parseWebhookUrl(value) {
   return parsedUrl;
 }
 
-export async function resolvePublicWebhookAddresses(
-  hostname,
-  lookup = dnsLookup,
-) {
+export async function resolvePublicWebhookAddresses(hostname, lookup = dnsLookup) {
   const normalized = normalizeHostname(hostname);
   const version = isIP(normalized);
 
@@ -215,9 +199,7 @@ export async function resolvePublicWebhookAddresses(
   }
 
   if (isBlockedHostname(normalized)) {
-    throw new Error(
-      "Webhook destination cannot target a local or reserved hostname",
-    );
+    throw new Error("Webhook destination cannot target a local or reserved hostname");
   }
 
   let addresses;
@@ -247,12 +229,27 @@ function createPublicLookup() {
   return (hostname, options, callback) => {
     resolvePublicWebhookAddresses(hostname)
       .then((addresses) => {
-        if (options?.all) {
-          callback(null, addresses);
+        const matchingAddresses = options?.family
+          ? addresses.filter((address) => address.family === options.family)
+          : addresses;
+
+        if (matchingAddresses.length === 0) {
+          const error = new Error("No webhook address matches the requested IP family");
+          error.code = "EAI_ADDRFAMILY";
+          callback(error);
           return;
         }
 
-        callback(null, addresses[0].address, addresses[0].family);
+        if (options?.all) {
+          callback(null, matchingAddresses);
+          return;
+        }
+
+        callback(
+          null,
+          matchingAddresses[0].address,
+          matchingAddresses[0].family,
+        );
       })
       .catch(callback);
   };
