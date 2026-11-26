@@ -41,9 +41,7 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const durationMs = performance.now() - startedAt;
-    const route = req.route?.path
-      ? `${req.baseUrl}${req.route.path}`
-      : "unmatched";
+    const route = req.route?.path ? `${req.baseUrl}${req.route.path}` : "unmatched";
 
     recordHttpRequest({
       method: req.method,
