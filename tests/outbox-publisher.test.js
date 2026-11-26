@@ -161,3 +161,21 @@ test("recovers a stale PROCESSING outbox claim", async () => {
   assert.equal(updates[1].where.attemptCount, 5);
   assert.equal(updates[1].data.status, "PUBLISHED");
 });
+
+test("handles a null publication error without crashing retry handling", async () => {
+  const db = createFakeDb(createOutboxRecord());
+  const now = new Date("2026-11-26T10:00:00.000Z");
+
+  const result = await publishOutboxBatch({
+    db,
+    now,
+    publish: async () => {
+      throw null;
+    },
+  });
+
+  assert.deepEqual(result, { claimed: 1, published: 0, deferred: 1 });
+  assert.equal(db.updates[1].data.status, "PENDING");
+  assert.equal(db.updates[1].data.lastError, "null");
+  assert.equal(db.updates[1].data.nextAttemptAt.toISOString(), "2026-11-26T10:00:01.000Z");
+});
