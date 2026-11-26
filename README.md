@@ -75,9 +75,27 @@ The architecture will evolve toward durable, horizontally scalable event process
 
 ## Project Status
 
-RelayForge is under active development.
+RelayForge is under active development. The current implementation includes tenant-scoped API keys, event ingestion, Kafka event streaming, durable webhook deliveries, retries, and delivery history.
 
-The current stage is **Project Foundation & Engineering Setup**.
+The current development stage is **Security & Production Hardening**.
+
+## Tenant API Authentication
+
+Creating a tenant with `POST /tenants` returns a generated API key once. Store it securely; RelayForge stores only its SHA-256 hash and does not return the key from later tenant reads.
+
+Send the key as a bearer token when accessing tenant-scoped routes:
+
+```http
+Authorization: Bearer rf_live_your_api_key
+```
+
+Existing tenants created before API key support have no key until it is rotated. Generate a new key for a tenant with:
+
+```bash
+npm run tenant:key:rotate -- <tenant-uuid>
+```
+
+Copy the printed key immediately and store it in a secret manager or local environment file. The old key is replaced and cannot be retrieved afterward.
 
 ## Getting Started
 
