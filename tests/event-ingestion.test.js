@@ -140,3 +140,44 @@ after(async () => {
   await rateLimitRedis.quit();
   await prisma.$disconnect();
 });
+
+test("POST /tenants/:id/events creates an outbox record when no enabled endpoints exist", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "event-no-endpoints");
+
+  try {
+    await prisma.webhookEndpoint.create({
+      data: {
+        tenantId: tenant.id,
+        url: "https://customer.example.com/disabled-webhook",
+        enabled: false,
+      },
+    });
+
+    const response = await request(app)
+      .post(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization)
+      .send({
+        eventType: "user.created",
+        payload: { userId: "user-no-endpoint" },
+      });
+
+    assert.equal(response.status, 201);
+    assert.equal(response.body.data.deliveryCount, 0);
+
+    const eventId = response.body.data.id;
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { eventId },
+    });
+    const outbox = await prisma.eventOutbox.findUnique({
+      where: { eventId },
+    });
+
+    assert.equal(deliveries.length, 0);
+    assert.ok(outbox);
+    assert.equal(outbox.status, "PENDING");
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: tenant.id },
+    });
+  }
+});
