@@ -155,7 +155,9 @@ All successful responses use a `data` envelope. Errors use an `error` object wit
 
 | Method | Route                                     | Authentication    | Purpose                             |
 | ------ | ----------------------------------------- | ----------------- | ----------------------------------- |
-| GET    | `/health`                                 | No                | API health response                 |
+| GET    | `/health`                                 | No                | API liveness response               |
+| GET    | `/ready`                                  | No                | PostgreSQL and Redis readiness      |
+| GET    | `/metrics`                                | No                | Prometheus text-format metrics      |
 | POST   | `/tenants`                                | No                | Create tenant; returns API key once |
 | GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
 | POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
@@ -240,6 +242,19 @@ Rotation invalidates the previous key. Copy the new key from the command output 
 - Webhook request header size limit
 
 **Important:** This is a portfolio project and a work in progress, not a managed production service. Before production use, complete the remaining reliability, operational, infrastructure, and security review work.
+
+## Observability
+
+- `GET /health` is a liveness check and does not require dependencies to be available.
+- `GET /ready` checks PostgreSQL and Redis and returns HTTP 503 when either dependency is unavailable.
+- `GET /metrics` exposes HTTP request counts, server-error counts, request-duration histograms, background operation outcomes, process uptime, and resident memory in Prometheus text format.
+- Every HTTP response includes an `X-Request-Id`. A valid client-provided ID is preserved; otherwise RelayForge generates a UUID. The same ID is included in the request-completion JSON log.
+- API and worker logs are JSON lines with a timestamp, severity, service name, event message, and relevant context.
+- Background delivery and Kafka outbox outcomes are recorded in logs and metrics.
+
+Metrics are process-local and reset when the process restarts. In a deployed environment, restrict access to `/metrics` and operational endpoints to trusted monitoring and infrastructure.
+
+See [the operations runbook](docs/operations-runbook.md) for diagnosis and routine checks.
 
 ## Development and verification
 
