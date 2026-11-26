@@ -181,7 +181,7 @@ app.get("/tenants/:id/ai/operations-summary", async (req, res) => {
     generateNarrative: async (facts) => {
       const provider = createModelProvider();
       return provider.generate(
-        `Summarize these RelayForge webhook operations facts in 3-5 concise sentences. Report the numbers exactly. Describe only recorded failure details; do not infer causes or suggest that you changed anything.\\n\\n${JSON.stringify(facts, null, 2)}`,
+        `Summarize these RelayForge webhook operations facts in 3-5 concise sentences. Report the numbers exactly. Describe only recorded failure details; do not infer causes or suggest that you changed anything.\n\n${JSON.stringify(facts, null, 2)}`,
       );
     },
   });
