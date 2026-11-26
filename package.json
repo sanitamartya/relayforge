@@ -12,7 +12,9 @@
     "format:check": "prettier --check .",
     "worker": "node src/workers/event-worker.js",
     "kafka:worker": "node src/workers/kafka-event-worker.js",
-    "tenant:key:rotate": "node scripts/rotate-tenant-api-key.js"
+    "tenant:key:rotate": "node scripts/rotate-tenant-api-key.js",
+    "test:coverage": "node --experimental-test-coverage --test tests/*.test.js",
+    "check": "npm run lint && npm run format:check && npm run test:coverage"
   },
   "keywords": [],
   "author": "",
