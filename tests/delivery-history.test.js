@@ -93,6 +93,71 @@ test("GET delivery history returns 404 for an event owned by another tenant", as
   }
 });
 
+test("GET delivery history paginates records in stable order", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "delivery-pagination");
+
+  try {
+    const event = await prisma.event.create({
+      data: {
+        tenantId: tenant.id,
+        eventType: "delivery.pagination",
+        payload: {},
+      },
+    });
+
+    const deliveries = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      const endpoint = await prisma.webhookEndpoint.create({
+        data: {
+          tenantId: tenant.id,
+          url: `https://customer.example.com/pagination-${index}`,
+        },
+      });
+
+      deliveries.push(
+        await prisma.webhookDelivery.create({
+          data: {
+            eventId: event.id,
+            endpointId: endpoint.id,
+            createdAt: new Date(Date.UTC(2026, 10, 26, 11, 0, index)),
+          },
+        }),
+      );
+    }
+
+    const firstPage = await request(app)
+      .get(`/tenants/${tenant.id}/events/${event.id}/deliveries?limit=2`)
+      .set("authorization", authorization);
+
+    assert.equal(firstPage.status, 200);
+    assert.equal(firstPage.body.data.deliveries.length, 2);
+    assert.equal(firstPage.body.data.pagination.hasMore, true);
+
+    const secondPage = await request(app)
+      .get(
+        `/tenants/${tenant.id}/events/${event.id}/deliveries?limit=2&cursor=${encodeURIComponent(firstPage.body.data.pagination.nextCursor)}`,
+      )
+      .set("authorization", authorization);
+
+    assert.equal(secondPage.status, 200);
+    assert.equal(secondPage.body.data.deliveries.length, 1);
+    assert.equal(secondPage.body.data.pagination.hasMore, false);
+
+    const returnedIds = [
+      ...firstPage.body.data.deliveries,
+      ...secondPage.body.data.deliveries,
+    ].map((delivery) => delivery.id);
+
+    assert.equal(new Set(returnedIds).size, 3);
+    assert.deepEqual(returnedIds, deliveries.map((delivery) => delivery.id));
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: tenant.id },
+    });
+  }
+});
+
 after(async () => {
   await eventQueue.close();
   await prisma.$disconnect();
