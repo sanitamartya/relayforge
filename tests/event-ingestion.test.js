@@ -244,4 +244,3 @@ test("POST /tenants/:id/events creates one pending delivery per enabled endpoint
     });
   }
 });
-\n
