@@ -15,14 +15,14 @@
 
 ## Latency
 
-| Metric | Result |
-| --- | ---: |
-| Minimum | 0.34 ms |
-| Mean | 3.73 ms |
-| p50 | 2.52 ms |
-| p90 | 7.28 ms |
-| p95 | 9.08 ms |
-| p99 | 13.81 ms |
+| Metric  | Result   |
+| ------- | -------: |
+| Minimum |  0.34 ms |
+| Mean    |  3.73 ms |
+| p50     |  2.52 ms |
+| p90     |  7.28 ms |
+| p95     |  9.08 ms |
+| p99     | 13.81 ms |
 | Maximum | 207.56 ms |
 
 ## Interpretation
@@ -44,4 +44,3 @@ npm run benchmark
 ```
 
 Default benchmark settings: 15 seconds, concurrency 10, target `http://127.0.0.1:3000/health`.
-
