@@ -39,6 +39,32 @@ test("Ollama provider sends a non-streaming chat request and returns its text", 
   assert.equal(result, "Three deliveries are pending.");
 });
 
+test("Ollama provider rejects non-success responses", async () => {
+  const provider = createOllamaProvider({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+    }),
+  });
+
+  await assert.rejects(provider.generate("test"), /HTTP 503/);
+});
+
+test("Ollama provider rejects an empty model response", async () => {
+  const provider = createOllamaProvider({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        message: {
+          content: "   ",
+        },
+      }),
+    }),
+  });
+
+  await assert.rejects(provider.generate("test"), /empty response/);
+});
+
 test("operations facts preserve the full recent failure count", () => {
   const facts = buildOperationsFacts({
     statusCounts: { FAILED: 7 },
@@ -71,6 +97,11 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
   assert.equal(tenantResponse.status, 201);
   const tenantId = tenantResponse.body.data.id;
   const authorization = `Bearer ${tenantResponse.body.data.apiKey}`;
+  const otherTenantResponse = await request(app).post("/tenants").send({
+    name: "ai-operations-other-tenant-test",
+  });
+  assert.equal(otherTenantResponse.status, 201);
+  const otherTenantId = otherTenantResponse.body.data.id;
 
   const previousProvider = process.env.AI_PROVIDER;
   process.env.AI_PROVIDER = "test-unavailable";
@@ -105,12 +136,40 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
       },
     });
 
+    const otherEvent = await prisma.event.create({
+      data: {
+        tenantId: otherTenantId,
+        eventType: "other.tenant.event",
+        payload: {
+          private: true,
+        },
+      },
+    });
+    const otherEndpoint = await prisma.webhookEndpoint.create({
+      data: {
+        tenantId: otherTenantId,
+        url: "https://other.example/webhook",
+      },
+    });
+    await prisma.webhookDelivery.create({
+      data: {
+        eventId: otherEvent.id,
+        endpointId: otherEndpoint.id,
+        status: "DELIVERED",
+        attemptCount: 1,
+      },
+    });
+
     const response = await request(app)
       .get(`/tenants/${tenantId}/ai/operations-summary`)
       .set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.facts.totalDeliveries, 1);
+    assert.deepEqual(
+      response.body.data.facts.recentFailures.map((failure) => failure.eventType),
+      ["test.delivery.failed"],
+    );
     assert.equal(response.body.data.facts.deliveryCounts.FAILED, 1);
     assert.equal(response.body.data.facts.recentFailureCount, 1);
     assert.equal(response.body.data.facts.recentFailures[0].attemptCount, 3);
@@ -147,7 +206,9 @@ test("tenant operations summary is authenticated and tenant-scoped", async () =>
     }
     await prisma.tenant.deleteMany({
       where: {
-        id: tenantId,
+        id: {
+          in: [tenantId, otherTenantId],
+        },
       },
     });
   }

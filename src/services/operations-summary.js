@@ -1,3 +1,5 @@
+import { recordBackgroundOperation } from "../observability/metrics.js";
+
 const DELIVERY_STATUSES = ["PENDING", "PROCESSING", "DELIVERED", "FAILED"];
 const RECENT_FAILURE_LIMIT = 5;
 const FAILURE_REASON_MAX_LENGTH = 220;
@@ -138,12 +140,22 @@ export async function getTenantOperationsSummary(
   if (generateNarrative) {
     try {
       const text = await generateNarrative(facts);
+      recordBackgroundOperation({
+        component: "ai-assistant",
+        operation: "generate_narrative",
+        outcome: "success",
+      });
       assistant = {
         provider: process.env.AI_PROVIDER || "ollama",
         status: "generated",
         text,
       };
     } catch {
+      recordBackgroundOperation({
+        component: "ai-assistant",
+        operation: "generate_narrative",
+        outcome: "unavailable",
+      });
       assistant.status = "unavailable";
     }
   }

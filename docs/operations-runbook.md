@@ -80,6 +80,28 @@ For one request, copy the response header and search the API's JSON-line logs fo
 
 Do not log or share API keys, authorization headers, database credentials, or webhook secrets.
 
+## AI operations assistant
+
+The AI endpoints are tenant-authenticated and read-only. They use the authenticated tenant context and do not accept model-generated database queries or operational actions.
+
+Request a factual delivery summary:
+
+```bash
+curl -sS http://localhost:3000/tenants/TENANT_ID/ai/operations-summary \
+  -H 'authorization: Bearer TENANT_API_KEY'
+```
+
+Ask a question about the same operational facts:
+
+```bash
+curl -sS -X POST http://localhost:3000/tenants/TENANT_ID/ai/ask \
+  -H 'authorization: Bearer TENANT_API_KEY' \
+  -H 'content-type: application/json' \
+  -d '{"question":"Why are my deliveries failing?"}'
+```
+
+The default model runs through local Ollama. If it is unavailable or times out, the API returns the database facts and a deterministic summary; the response marks the generated narrative as unavailable. Check `relayforge_background_operations_total` for component `ai-assistant` and operation `generate_narrative` to monitor model availability. Prompts and model responses are not written to application logs.
+
 ## Common failure diagnosis
 
 ### API readiness returns 503

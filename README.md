@@ -19,6 +19,7 @@ RelayForge accepts application events, stores them in PostgreSQL with a transact
 - Redis-backed per-tenant rate limiting
 - Webhook URL validation and DNS/IP-based SSRF defenses
 - HTTP response hardening, JSON body limit, and structured errors
+- Read-only AI operations summary and tenant-scoped natural-language Q&A using local Ollama
 - Unit and route tests, linting, formatting checks, and GitHub Actions CI
 
 ## Architecture
@@ -172,6 +173,8 @@ The assistant uses the Ollama provider by default and does not require a paid mo
    ```
 
 If the local model is unavailable or times out, RelayForge still returns the operational facts and a deterministic summary. Model output is narrative only; the database facts are authoritative and the assistant cannot perform actions.
+
+The model URL is relative to the API process. If the API runs inside the repository's Docker Compose container, `127.0.0.1` refers to that container, not the host. Set `OLLAMA_BASE_URL` in the private `.env.container` to `http://host.docker.internal:11434` for a host-running Ollama (the Compose API service includes a Linux host-gateway mapping), or to the private address of a separate Ollama server. In a cloud deployment, use a private network address for the model host; do not expose Ollama publicly.
 
 Example:
 
@@ -343,13 +346,12 @@ RelayForge is being built in phases:
 8. Kafka and event streaming
 9. Security and production hardening
 10. Testing and quality engineering
-11. Observability and operations
-12. Performance and scalability
-13. Cloud deployment and infrastructure
-14. AI operations assistant
-15. Portfolio and interview readiness
+11. Performance and scalability
+12. Cloud deployment and infrastructure
+13. AI operations assistant
+14. Portfolio and interview readiness
 
-The roadmap reflects the full engineering journey; some later capabilities are planned and are not yet implemented.
+The local production deployment configuration is completed in Phase 12. The actual cloud rollout follows Phase 13's AI assistant validation and precedes Phase 14 portfolio finalization. The roadmap reflects the agreed engineering journey; later capabilities may still be in progress.
 
 ## License
 
