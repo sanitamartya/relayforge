@@ -4,6 +4,8 @@ import { eventQueue } from "../queue/event-queue.js";
 import { publishOutboxBatch } from "../kafka/outbox-publisher.js";
 import { disconnectKafkaProducer } from "../kafka/event-producer.js";
 import { startKafkaEventConsumer, stopKafkaEventConsumer } from "../kafka/event-consumer.js";
+import { logger } from "../observability/logger.js";
+import { recordBackgroundOperation } from "../observability/metrics.js";
 
 const OUTBOX_POLL_INTERVAL_MS = 1000;
 const CONSUMER_RETRY_INTERVAL_MS = 5000;
