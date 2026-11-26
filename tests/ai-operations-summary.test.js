@@ -42,8 +42,6 @@ test(
     assert.equal(requestBody.model, "test-model");
     assert.equal(requestBody.stream, false);
     assert.equal(result, "Three deliveries are pending.");
-  });
-
   },
 );
 
@@ -172,8 +170,6 @@ test(
         },
       });
     }
-  });
-
   },
 );
 
