@@ -7,35 +7,13 @@ import { eventQueue, deliveryJobOptions } from "../queue/event-queue.js";
 import { processDelivery } from "./delivery-processor.js";
 import { logger } from "../observability/logger.js";
 import { recordBackgroundOperation } from "../observability/metrics.js";
+import { parseWorkerConcurrency } from "./worker-config.js";
 
 const QUEUE_NAME = "relayforge-event-processing";
 const DISPATCH_INTERVAL_MS = 5000;
 const STALE_PROCESSING_MS = 60_000;
 const DISPATCH_BATCH_SIZE = 100;
-const DEFAULT_WORKER_CONCURRENCY = 10;
-const MAX_WORKER_CONCURRENCY = 100;
-
-function getWorkerConcurrency() {
-  const configured = process.env.WEBHOOK_WORKER_CONCURRENCY;
-
-  if (configured === undefined || configured === "") {
-    return DEFAULT_WORKER_CONCURRENCY;
-  }
-
-  const concurrency = Number(configured);
-
-  if (
-    !Number.isSafeInteger(concurrency) ||
-    concurrency < 1 ||
-    concurrency > MAX_WORKER_CONCURRENCY
-  ) {
-    throw new Error(
-      `WEBHOOK_WORKER_CONCURRENCY must be an integer between 1 and ${MAX_WORKER_CONCURRENCY}`,
-    );
-  }
-
-  return concurrency;
-}
+const workerConcurrency = parseWorkerConcurrency(process.env.WEBHOOK_WORKER_CONCURRENCY);
 
 const worker = new Worker(
   QUEUE_NAME,
@@ -48,7 +26,7 @@ const worker = new Worker(
   },
   {
     connection: redisConnection,
-    concurrency: getWorkerConcurrency(),
+    concurrency: workerConcurrency,
   },
 );
 
