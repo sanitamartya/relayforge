@@ -79,10 +79,7 @@ test("defers failed Kafka publication and schedules an exponential retry", async
   assert.deepEqual(result, { claimed: 1, published: 0, deferred: 1 });
   assert.equal(db.updates[1].data.status, "PENDING");
   assert.equal(db.updates[1].data.lastError, "Kafka broker unavailable");
-  assert.equal(
-    db.updates[1].data.nextAttemptAt.toISOString(),
-    "2026-11-26T10:00:04.000Z",
-  );
+  assert.equal(db.updates[1].data.nextAttemptAt.toISOString(), "2026-11-26T10:00:04.000Z");
 });
 
 test("does not publish an outbox record when another worker claims it", async () => {
