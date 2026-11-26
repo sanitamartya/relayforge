@@ -103,7 +103,8 @@ export function createTenantRateLimiter({
         });
       }
       return next();
-    } catch {
+    } catch (error) {
+      console.error("Tenant rate limiter failed:", error.message);
       return res.status(503).json({
         error: {
           code: "RATE_LIMITER_UNAVAILABLE",
