@@ -180,6 +180,15 @@ curl http://localhost:3000/tenants/<TENANT_ID>/ai/operations-summary \
   -H "Authorization: Bearer <TENANT_API_KEY>"
 ```
 
+The same read-only facts can be queried with a natural-language question:
+
+```bash
+curl -X POST http://localhost:3000/tenants/<TENANT_ID>/ai/ask \\
+  -H "Authorization: Bearer <TENANT_API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"question":"Why are my deliveries failing?"}'
+```
+
 ## API overview
 
 All successful responses use a `data` envelope. Errors use an `error` object with a machine-readable `code` and message.
@@ -192,6 +201,7 @@ All successful responses use a `data` envelope. Errors use an `error` object wit
 | POST   | `/tenants`                                | No                | Create tenant; returns API key once |
 | GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
 | GET    | `/tenants/:id/ai/operations-summary`      | Tenant bearer key | Read-only AI operations summary     |
+| POST   | `/tenants/:id/ai/ask`                     | Tenant bearer key | Ask a read-only operations question |
 | POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
 | POST   | `/tenants/:id/events`                     | Tenant bearer key | Persist and publish an event        |
 | GET    | `/tenants/:id/events`                     | Tenant bearer key | Paginated tenant event history      |
