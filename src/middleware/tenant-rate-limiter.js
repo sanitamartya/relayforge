@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { clearTimeout, setTimeout } from "node:timers";
+import { logger } from "../observability/logger.js";
+import { recordBackgroundOperation } from "../observability/metrics.js";
 
 const DEFAULT_LIMIT = 100;
 const DEFAULT_WINDOW_MS = 60_000;
@@ -104,7 +106,16 @@ export function createTenantRateLimiter({
       }
       return next();
     } catch (error) {
-      console.error("Tenant rate limiter failed:", error.message);
+      recordBackgroundOperation({
+        component: "tenant_rate_limiter",
+        operation: "check",
+        outcome: "unavailable",
+      });
+      logger.error("tenant_rate_limiter_unavailable", {
+        requestId: req.requestId,
+        tenantId,
+        error,
+      });
       return res.status(503).json({
         error: {
           code: "RATE_LIMITER_UNAVAILABLE",
