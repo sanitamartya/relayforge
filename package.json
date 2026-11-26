@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "worker": "node src/workers/event-worker.js",
-    "kafka:worker": "node src/workers/kafka-event-worker.js"
+    "kafka:worker": "node src/workers/kafka-event-worker.js",
+    "tenant:key:rotate": "node scripts/rotate-tenant-api-key.js"
   },
   "keywords": [],
   "author": "",

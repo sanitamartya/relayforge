@@ -3,6 +3,8 @@ import { URL } from "node:url";
 import { prisma } from "./db/prisma.js";
 // Event delivery is queued by the Kafka consumer.
 import { publishEvent } from "./kafka/event-producer.js";
+import { generateApiKey, hashApiKey } from "./security/api-key.js";
+import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 
 const app = express();
 
@@ -35,18 +37,24 @@ app.post("/tenants", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Tenant name is required");
   }
 
+  const apiKey = generateApiKey();
+
   const tenant = await prisma.tenant.create({
     data: {
       name: name.trim(),
+      apiKeyHash: hashApiKey(apiKey),
     },
   });
 
   return sendSuccess(res, 201, {
     id: tenant.id,
     name: tenant.name,
+    apiKey,
     createdAt: tenant.createdAt,
   });
 });
+
+app.use("/tenants/:id", requireTenantApiKey);
 
 app.get("/tenants/:id", async (req, res) => {
   const { id } = req.params;
