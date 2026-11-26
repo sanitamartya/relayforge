@@ -245,11 +245,7 @@ function createPublicLookup() {
           return;
         }
 
-        callback(
-          null,
-          matchingAddresses[0].address,
-          matchingAddresses[0].family,
-        );
+        callback(null, matchingAddresses[0].address, matchingAddresses[0].family);
       })
       .catch(callback);
   };
