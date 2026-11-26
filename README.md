@@ -55,18 +55,18 @@ The delivery worker can retry failed jobs according to the queue's retry policy.
 
 ## Technology stack
 
-| Layer | Technology |
-| --- | --- |
-| Runtime | Node.js 22+ |
-| API | Express 5 |
-| Database | PostgreSQL 18 |
-| ORM | Prisma 7 |
-| Queue | Redis 7, BullMQ |
-| Event streaming | Apache Kafka 4.x |
-| Tests | Node.js test runner, Supertest |
-| Code quality | ESLint, Prettier |
-| CI | GitHub Actions |
-| Local infrastructure | Docker Compose |
+| Layer                | Technology                     |
+| -------------------- | ------------------------------ |
+| Runtime              | Node.js 22+                    |
+| API                  | Express 5                      |
+| Database             | PostgreSQL 18                  |
+| ORM                  | Prisma 7                       |
+| Queue                | Redis 7, BullMQ                |
+| Event streaming      | Apache Kafka 4.x               |
+| Tests                | Node.js test runner, Supertest |
+| Code quality         | ESLint, Prettier               |
+| CI                   | GitHub Actions                 |
+| Local infrastructure | Docker Compose                 |
 
 ## Requirements
 
@@ -150,15 +150,15 @@ curl http://localhost:3000/health
 
 All successful responses use a `data` envelope. Errors use an `error` object with a machine-readable `code` and message.
 
-| Method | Route | Authentication | Purpose |
-| --- | --- | --- | --- |
-| GET | `/health` | No | API health response |
-| POST | `/tenants` | No | Create tenant; returns API key once |
-| GET | `/tenants/:id` | Tenant bearer key | Read tenant |
-| POST | `/tenants/:id/webhook-endpoints` | Tenant bearer key | Register webhook endpoint |
-| POST | `/tenants/:id/events` | Tenant bearer key | Persist and publish an event |
-| GET | `/tenants/:id/events` | Tenant bearer key | List tenant events |
-| GET | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Read delivery history for an event |
+| Method | Route                                     | Authentication    | Purpose                             |
+| ------ | ----------------------------------------- | ----------------- | ----------------------------------- |
+| GET    | `/health`                                 | No                | API health response                 |
+| POST   | `/tenants`                                | No                | Create tenant; returns API key once |
+| GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
+| POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
+| POST   | `/tenants/:id/events`                     | Tenant bearer key | Persist and publish an event        |
+| GET    | `/tenants/:id/events`                     | Tenant bearer key | List tenant events                  |
+| GET    | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Read delivery history for an event  |
 
 Tenant-scoped requests must include:
 

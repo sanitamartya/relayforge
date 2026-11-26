@@ -271,9 +271,7 @@ test("public lookup returns all validated addresses when all is true", async (t)
   });
 
   assert.equal(result.error, null);
-  assert.deepEqual(result.addresses, [
-    { address: "93.184.216.34", family: 4 },
-  ]);
+  assert.deepEqual(result.addresses, [{ address: "93.184.216.34", family: 4 }]);
 });
 
 test("public lookup returns the first address when all is not requested", async (t) => {
@@ -314,7 +312,5 @@ test("public lookup filters matching address family when returning all addresses
   });
 
   assert.equal(result.error, null);
-  assert.deepEqual(result.addresses, [
-    { address: "93.184.216.34", family: 4 },
-  ]);
+  assert.deepEqual(result.addresses, [{ address: "93.184.216.34", family: 4 }]);
 });
