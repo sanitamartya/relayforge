@@ -2,6 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import request from "supertest";
+import { URLSearchParams } from "node:url";
 
 import app from "../src/app.js";
 import { eventQueue } from "../src/queue/event-queue.js";
