@@ -178,15 +178,6 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   const { id: tenantId } = req.params;
   const url = req.body?.url;
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
-  }
-
   if (typeof url !== "string" || url.trim().length === 0) {
     return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL is required");
   }
@@ -219,15 +210,6 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
 app.post("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
   const { eventType, payload } = req.body ?? {};
-
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
-  }
 
   if (typeof eventType !== "string" || eventType.trim().length === 0) {
     return sendError(res, 400, "VALIDATION_ERROR", "Event type is required");
@@ -289,15 +271,6 @@ app.get("/tenants/:id/events/:eventId/deliveries", async (req, res) => {
 
   if (pagination.error) {
     return sendError(res, 400, "VALIDATION_ERROR", pagination.error);
-  }
-
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
   }
 
   const event = await prisma.event.findFirst({
@@ -385,15 +358,6 @@ app.get("/tenants/:id/events", async (req, res) => {
 
   if (pagination.error) {
     return sendError(res, 400, "VALIDATION_ERROR", pagination.error);
-  }
-
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
   }
 
   const where = { tenantId };
