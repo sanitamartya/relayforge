@@ -16,6 +16,43 @@ test("GET /health returns a successful health response", async () => {
   });
 });
 
+test("Request IDs are echoed and valid client IDs are preserved", async () => {
+  const response = await request(app).get("/health").set("X-Request-Id", "test-request-123");
+
+  assert.equal(response.headers["x-request-id"], "test-request-123");
+});
+
+test("Invalid request IDs are replaced with generated IDs", async () => {
+  const response = await request(app).get("/health").set("X-Request-Id", "invalid request id");
+
+  assert.match(response.headers["x-request-id"], /^[0-9a-f-]{36}$/i);
+});
+
+test("GET /ready reports database and Redis dependency status", async () => {
+  const response = await request(app).get("/ready");
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.data, {
+    status: "ready",
+    service: "relayforge",
+    checks: {
+      database: "ok",
+      redis: "ok",
+    },
+  });
+});
+
+test("GET /metrics exposes Prometheus-compatible HTTP and process metrics", async () => {
+  const response = await request(app).get("/metrics");
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"], /text\/plain/);
+  assert.match(response.text, /relayforge_http_requests_total/);
+  assert.match(response.text, /relayforge_http_request_duration_seconds_bucket/);
+  assert.match(response.text, /relayforge_process_uptime_seconds/);
+  assert.match(response.text, /relayforge_process_resident_memory_bytes/);
+});
+
 test("API responses include baseline security headers", async () => {
   const response = await request(app).get("/health");
 
