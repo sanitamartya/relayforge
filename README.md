@@ -103,6 +103,20 @@ The API adds baseline response security headers, disables the Express identifyin
 
 JSON request bodies are limited to 1 MB. Oversized requests receive HTTP 413, and malformed JSON receives a structured HTTP 400 response.
 
+## Tenant API Rate Limiting
+
+Authenticated tenant API routes use a Redis-backed rate limit. The default is 100 requests per tenant per 60-second window. Limits are isolated by authenticated tenant ID and enforced atomically in Redis, so multiple API instances share the same quota.
+
+Configure the limit and window in your environment:
+
+```env
+TENANT_RATE_LIMIT_MAX=100
+TENANT_RATE_LIMIT_WINDOW_MS=60000
+TENANT_RATE_LIMIT_REDIS_TIMEOUT_MS=1500
+```
+
+Requests over the limit receive HTTP 429 with a `Retry-After` header. If Redis rate-limit checks fail or time out, the API returns HTTP 503 rather than bypassing the protection.
+
 ## Webhook SSRF Protection
 
 Webhook URLs must use HTTP or HTTPS, cannot contain credentials, and cannot target local or reserved hostnames or non-public IP addresses.
