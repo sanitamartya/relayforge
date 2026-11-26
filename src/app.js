@@ -8,7 +8,22 @@ import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 
 const app = express();
 
-app.use(express.json());
+app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",
+  });
+
+  return next();
+});
+
+app.use(express.json({ limit: "1mb" }));
 
 function sendSuccess(res, statusCode, data) {
   return res.status(statusCode).json({ data });
@@ -286,8 +301,15 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err);
+  if (err?.type === "entity.too.large") {
+    return sendError(res, 413, "PAYLOAD_TOO_LARGE", "Request body must not exceed 1 MB");
+  }
 
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return sendError(res, 400, "INVALID_JSON", "Request body must contain valid JSON");
+  }
+
+  console.error(err);
   return sendError(res, 500, "INTERNAL_SERVER_ERROR", "An unexpected error occurred");
 });
 
