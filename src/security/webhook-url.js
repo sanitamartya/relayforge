@@ -48,7 +48,7 @@ const BLOCKED_HOST_SUFFIXES = [
 ];
 
 function normalizeHostname(hostname) {
-  return hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "").toLowerCase();
+  return hostname.replace(/^\[|\]$/g, "").replace(/\.+$/, "").toLowerCase();
 }
 
 function ipv4ToBigInt(address) {
@@ -91,7 +91,10 @@ function ipv6ToBigInt(address) {
     return null;
   }
 
-  const groups = halves.length === 2 ? [...left, ...Array(missingGroups).fill("0"), ...right] : left;
+  const groups =
+    halves.length === 2
+      ? [...left, ...Array(missingGroups).fill("0"), ...right]
+      : left;
 
   if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {
     return null;
@@ -183,7 +186,10 @@ export function parseWebhookUrl(value) {
   return parsedUrl;
 }
 
-export async function resolvePublicWebhookAddresses(hostname, lookup = dnsLookup) {
+export async function resolvePublicWebhookAddresses(
+  hostname,
+  lookup = dnsLookup,
+) {
   const normalized = normalizeHostname(hostname);
   const version = isIP(normalized);
 
@@ -196,7 +202,9 @@ export async function resolvePublicWebhookAddresses(hostname, lookup = dnsLookup
   }
 
   if (isBlockedHostname(normalized)) {
-    throw new Error("Webhook destination cannot target a local or reserved hostname");
+    throw new Error(
+      "Webhook destination cannot target a local or reserved hostname",
+    );
   }
 
   let addresses;
