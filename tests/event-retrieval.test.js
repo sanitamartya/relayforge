@@ -105,10 +105,12 @@ test("GET events paginates without duplicate or missing records", async () => {
     assert.equal(firstPage.body.data.pagination.hasMore, true);
     assert.ok(firstPage.body.data.pagination.nextCursor);
 
+    const nextPageQuery = new URLSearchParams({
+      limit: "2",
+      cursor: firstPage.body.data.pagination.nextCursor,
+    });
     const secondPage = await request(app)
-      .get(
-        `/tenants/${tenant.id}/events?limit=2&cursor=${encodeURIComponent(firstPage.body.data.pagination.nextCursor)}`,
-      )
+      .get(`/tenants/${tenant.id}/events?${nextPageQuery}`)
       .set("authorization", authorization);
 
     assert.equal(secondPage.status, 200);
