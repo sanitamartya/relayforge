@@ -111,3 +111,22 @@ test("returns zero counts when no outbox events are due", async () => {
   assert.deepEqual(result, { claimed: 0, published: 0, deferred: 0 });
   assert.equal(db.updates.length, 0);
 });
+
+
+test("caps retry delay at five minutes and bounds stored errors", async () => {
+  const record = createOutboxRecord({ attemptCount: 9 });
+  const db = createFakeDb(record);
+  const now = new Date("2026-11-26T10:00:00.000Z");
+
+  const result = await publishOutboxBatch({
+    db,
+    now,
+    publish: async () => {
+      throw new Error("x".repeat(1200));
+    },
+  });
+
+  assert.deepEqual(result, { claimed: 1, published: 0, deferred: 1 });
+  assert.equal(db.updates[1].data.lastError.length, 1000);
+  assert.equal(db.updates[1].data.nextAttemptAt.toISOString(), "2026-11-26T10:05:00.000Z");
+});
