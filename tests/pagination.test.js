@@ -3,10 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-import {
-  encodePaginationCursor,
-  parsePagination,
-} from "../src/utils/pagination.js";
+import { encodePaginationCursor, parsePagination } from "../src/utils/pagination.js";
 
 test("pagination defaults to a bounded page size", () => {
   assert.deepEqual(parsePagination({}), {
@@ -44,9 +41,9 @@ test("pagination cursor round-trips a record ID and timestamp", () => {
 });
 
 test("pagination rejects malformed cursors", () => {
-  const invalidCursor = Buffer.from(
-    JSON.stringify({ id: "bad", createdAt: "bad" }),
-  ).toString("base64url");
+  const invalidCursor = Buffer.from(JSON.stringify({ id: "bad", createdAt: "bad" })).toString(
+    "base64url",
+  );
 
   for (const cursor of ["invalid", "", "e30", invalidCursor]) {
     assert.equal(parsePagination({ cursor }).error, "cursor is invalid");
