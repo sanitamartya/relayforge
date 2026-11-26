@@ -2,6 +2,8 @@
 import "dotenv/config";
 import { performance } from "node:perf_hooks";
 
+const MAX_LATENCY_SAMPLES = 100_000;
+
 function readInteger(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
   const value = process.env[name];
 
@@ -18,7 +20,27 @@ function readInteger(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } 
   return parsed;
 }
 
+function getTargetUrl(value) {
+  const url = new URL(value);
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("BENCHMARK_URL must use http or https");
+  }
+
+  url.username = url.username ? "[REDACTED]" : "";
+  url.password = url.password ? "[REDACTED]" : "";
+
+  for (const key of url.searchParams.keys()) {
+    if (/token|key|auth|secret|password|signature|credential/i.test(key)) {
+      url.searchParams.set(key, "[REDACTED]");
+    }
+  }
+
+  return url.toString();
+}
+
 const targetUrl = process.env.BENCHMARK_URL ?? "http://127.0.0.1:3000/health";
+const safeTargetUrl = getTargetUrl(targetUrl);
 const durationSeconds = readInteger("BENCHMARK_DURATION_SECONDS", 15, {
   min: 1,
   max: 300,
@@ -37,6 +59,29 @@ const statusCounts = {};
 let completed = 0;
 let networkErrors = 0;
 let nonSuccessResponses = 0;
+let latencySamplesSeen = 0;
+let totalLatencyMs = 0;
+let minLatencyMs = Infinity;
+let maxLatencyMs = 0;
+
+function recordLatency(latencyMs) {
+  latencySamplesSeen += 1;
+  totalLatencyMs += latencyMs;
+  minLatencyMs = Math.min(minLatencyMs, latencyMs);
+  maxLatencyMs = Math.max(maxLatencyMs, latencyMs);
+
+  if (latencies.length < MAX_LATENCY_SAMPLES) {
+    latencies.push(latencyMs);
+    return;
+  }
+
+  // Reservoir sampling keeps a representative bounded sample for percentiles.
+  const replacementIndex = Math.floor(Math.random() * latencySamplesSeen);
+
+  if (replacementIndex < MAX_LATENCY_SAMPLES) {
+    latencies[replacementIndex] = latencyMs;
+  }
+}
 
 async function runWorker() {
   while (performance.now() < deadline) {
@@ -51,7 +96,7 @@ async function runWorker() {
 
       await response.arrayBuffer();
 
-      latencies.push(performance.now() - requestStarted);
+      recordLatency(performance.now() - requestStarted);
       completed += 1;
       statusCounts[response.status] = (statusCounts[response.status] ?? 0) + 1;
 
@@ -79,14 +124,12 @@ function percentile(value) {
 }
 
 const meanLatencyMs =
-  latencies.length === 0
-    ? null
-    : Number((latencies.reduce((sum, latency) => sum + latency, 0) / latencies.length).toFixed(2));
+  latencySamplesSeen === 0 ? null : Number((totalLatencyMs / latencySamplesSeen).toFixed(2));
 
 console.log(
   JSON.stringify(
     {
-      targetUrl,
+      targetUrl: safeTargetUrl,
       durationSeconds: Number(elapsedSeconds.toFixed(2)),
       concurrency,
       completedRequests: completed,
@@ -94,14 +137,16 @@ console.log(
       nonSuccessResponses,
       requestsPerSecond: Number((completed / elapsedSeconds).toFixed(2)),
       statusCounts,
+      latencySampleCount: latencies.length,
+      latencySampleLimit: MAX_LATENCY_SAMPLES,
       latencyMs: {
-        min: latencies.length ? Number(latencies[0].toFixed(2)) : null,
+        min: latencySamplesSeen ? Number(minLatencyMs.toFixed(2)) : null,
         mean: meanLatencyMs,
         p50: percentile(0.5),
         p90: percentile(0.9),
         p95: percentile(0.95),
         p99: percentile(0.99),
-        max: latencies.length ? Number(latencies.at(-1).toFixed(2)) : null,
+        max: latencySamplesSeen ? Number(maxLatencyMs.toFixed(2)) : null,
       },
     },
     null,
