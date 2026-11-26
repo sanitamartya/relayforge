@@ -74,7 +74,7 @@ app.post("/tenants", async (req, res) => {
 app.use("/tenants/:id", requireTenantApiKey);
 
 const tenantRateLimiter = createTenantRateLimiter({
-  getRedisClient: () => eventQueue.client,
+  getRedisClient: () => eventQueue.connection.client,
 });
 
 app.use("/tenants/:id", tenantRateLimiter);
