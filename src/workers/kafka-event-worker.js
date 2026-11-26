@@ -23,10 +23,11 @@ async function runOutboxPublisher() {
     const result = await publishOutboxBatch();
 
     if (result.deferred > 0) {
-      console.warn(`Kafka outbox deferred ${result.deferred} event(s) for retry`);
+      logger.warn("kafka_outbox_batch_deferred", { deferred: result.deferred });
     }
   } catch (error) {
-    console.error("Kafka outbox publisher failed:", error);
+    recordBackgroundOperation({ component: "kafka_outbox", operation: "poll", outcome: "error" });
+    logger.error("kafka_outbox_publisher_failed", { error });
   } finally {
     publishing = false;
   }
@@ -38,7 +39,8 @@ async function startConsumerWithRetry() {
       await startKafkaEventConsumer();
       return;
     } catch (error) {
-      console.error("Kafka consumer failed to start; retrying:", error.message);
+      recordBackgroundOperation({ component: "kafka_consumer", operation: "connect", outcome: "retrying" });
+      logger.error("kafka_consumer_start_failed_retrying", { error });
 
       try {
         await stopKafkaEventConsumer();
@@ -58,7 +60,7 @@ async function shutdown() {
 
   shuttingDown = true;
 
-  console.log("Shutting down Kafka event worker...");
+  logger.info("kafka_event_worker_shutdown_started");
 
   if (outboxInterval) {
     clearInterval(outboxInterval);
@@ -70,10 +72,10 @@ async function shutdown() {
     await eventQueue.close();
     await prisma.$disconnect();
 
-    console.log("Kafka event worker stopped");
+    logger.info("kafka_event_worker_stopped");
     process.exit(0);
   } catch (error) {
-    console.error("Kafka event worker shutdown failed:", error);
+    logger.error("kafka_event_worker_shutdown_failed", { error });
     process.exit(1);
   }
 }
