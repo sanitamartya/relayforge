@@ -238,12 +238,15 @@ app.post("/tenants/:id/events", async (req, res) => {
       },
     });
 
-    const deliveryResult = await tx.webhookDelivery.createMany({
-      data: endpoints.map((endpoint) => ({
-        eventId: event.id,
-        endpointId: endpoint.id,
-      })),
-    });
+    const deliveryResult =
+      endpoints.length === 0
+        ? { count: 0 }
+        : await tx.webhookDelivery.createMany({
+            data: endpoints.map((endpoint) => ({
+              eventId: event.id,
+              endpointId: endpoint.id,
+            })),
+          });
 
     await tx.eventOutbox.create({
       data: {
