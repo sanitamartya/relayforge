@@ -112,7 +112,6 @@ test("returns zero counts when no outbox events are due", async () => {
   assert.equal(db.updates.length, 0);
 });
 
-
 test("caps retry delay at five minutes and bounds stored errors", async () => {
   const record = createOutboxRecord({ attemptCount: 9 });
   const db = createFakeDb(record);
