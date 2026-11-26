@@ -4,6 +4,8 @@ import { prisma } from "../db/prisma.js";
 import { redisConnection } from "../queue/redis-connection.js";
 import { eventQueue, deliveryJobOptions } from "../queue/event-queue.js";
 import { processDelivery } from "./delivery-processor.js";
+import { logger } from "../observability/logger.js";
+import { recordBackgroundOperation } from "../observability/metrics.js";
 
 const QUEUE_NAME = "relayforge-event-processing";
 const DISPATCH_INTERVAL_MS = 5000;
@@ -25,7 +27,17 @@ const worker = new Worker(
 );
 
 worker.on("completed", (job, result) => {
-  console.log(`Delivery job ${job.id} completed`, result);
+  const outcome = result?.delivered ? "delivered" : "skipped";
+  recordBackgroundOperation({
+    component: "webhook_delivery",
+    operation: "process",
+    outcome,
+  });
+  logger.info("delivery_job_completed", {
+    jobId: job.id,
+    deliveryId: job.data.deliveryId,
+    result,
+  });
 });
 
 worker.on("failed", async (job, error) => {
@@ -130,9 +142,23 @@ async function runDispatcher() {
   dispatching = true;
 
   try {
-    await dispatchPendingDeliveries();
+    const dispatched = await dispatchPendingDeliveries();
+
+    if (dispatched > 0) {
+      recordBackgroundOperation({
+        component: "delivery_dispatcher",
+        operation: "dispatch",
+        outcome: "queued",
+      });
+      logger.info("delivery_dispatch_batch_queued", { count: dispatched });
+    }
   } catch (error) {
-    console.error("Delivery dispatcher failed:", error);
+    recordBackgroundOperation({
+      component: "delivery_dispatcher",
+      operation: "dispatch",
+      outcome: "error",
+    });
+    logger.error("delivery_dispatcher_failed", { error });
   } finally {
     dispatching = false;
   }
@@ -143,10 +169,10 @@ dispatcherInterval.unref();
 
 await runDispatcher();
 
-console.log("RelayForge delivery worker is running");
+logger.info("delivery_worker_started");
 
 async function shutdown() {
-  console.log("Shutting down worker...");
+  logger.info("delivery_worker_shutdown_started");
 
   clearInterval(dispatcherInterval);
 
