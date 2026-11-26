@@ -29,16 +29,15 @@ Client
   | Bearer API key
   v
 Express API -------> PostgreSQL
-  |                    | Tenant / Event / Endpoint / Delivery
-  |                    | EventOutbox (same transaction)
-  |                    v
-  |              Outbox publisher
-  |                    |
-  |                    | retryable publish
-  |                    v
-  +----------------> Kafka topic
-  |
-  v
+                         | Event / Delivery / Outbox
+                         v
+                   Outbox publisher
+                         |
+                         | retryable publish
+                         v
+                     Kafka topic
+                         |
+                         v
 Kafka consumer -------> Redis / BullMQ
                            |
                            v
