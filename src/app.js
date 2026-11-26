@@ -1,8 +1,6 @@
 import express from "express";
 import { parseWebhookUrl } from "./security/webhook-url.js";
 import { prisma } from "./db/prisma.js";
-// Event delivery is queued by the Kafka consumer.
-import { publishEvent } from "./kafka/event-producer.js";
 import { generateApiKey, hashApiKey } from "./security/api-key.js";
 import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
@@ -138,7 +136,7 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   });
 });
 
-// Publish an event and create its delivery records.
+// Persist an event, its deliveries, and its Kafka publication intent atomically.
 app.post("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
   const { eventType, payload } = req.body ?? {};
@@ -160,7 +158,6 @@ app.post("/tenants/:id/events", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Event payload must be a JSON object or array");
   }
 
-  // Create the event and its delivery records in one transaction.
   const result = await prisma.$transaction(async (tx) => {
     const event = await tx.event.create({
       data: {
@@ -191,17 +188,13 @@ app.post("/tenants/:id/events", async (req, res) => {
       ),
     );
 
-    return { event, deliveries };
-  });
+    await tx.eventOutbox.create({
+      data: {
+        eventId: event.id,
+      },
+    });
 
-  // Publish the persisted event to Kafka.
-  // The Kafka consumer will queue the matching deliveries.
-  await publishEvent({
-    id: result.event.id,
-    tenantId: result.event.tenantId,
-    eventType: result.event.eventType,
-    payload: result.event.payload,
-    createdAt: result.event.createdAt,
+    return { event, deliveries };
   });
 
   return sendSuccess(res, 201, {
