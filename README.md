@@ -97,6 +97,12 @@ npm run tenant:key:rotate -- <tenant-uuid>
 
 Copy the printed key immediately and store it in a secret manager or local environment file. The old key is replaced and cannot be retrieved afterward.
 
+## HTTP API Hardening
+
+The API adds baseline response security headers, disables the Express identifying header, and marks responses as non-cacheable to help protect sensitive API responses such as the one-time tenant API key.
+
+JSON request bodies are limited to 1 MB. Oversized requests receive HTTP 413, and malformed JSON receives a structured HTTP 400 response.
+
 ## Webhook SSRF Protection
 
 Webhook URLs must use HTTP or HTTPS, cannot contain credentials, and cannot target local or reserved hostnames or non-public IP addresses.
