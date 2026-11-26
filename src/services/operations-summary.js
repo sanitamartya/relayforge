@@ -26,7 +26,7 @@ export function buildOperationsFacts({ statusCounts, totalDeliveries, recentFail
     generatedAt: generatedAt.toISOString(),
     totalDeliveries,
     deliveryCounts: counts,
-    recentFailureCount: recentFailures.length,
+    recentFailureCount,
     recentFailures: recentFailures.map((delivery) => ({
       eventType: delivery.event.eventType,
       status: delivery.status,
@@ -65,7 +65,16 @@ export async function getTenantOperationsSummary(
   { generateNarrative, now = new Date() } = {},
 ) {
   const since = new Date(now.getTime() - HOURS_24_MS);
-  const [groupedStatuses, recentFailures] = await Promise.all([
+  const failureWhere = {
+    event: {
+      tenantId,
+    },
+    updatedAt: {
+      gte: since,
+    },
+    OR: [{ status: "FAILED" }, { lastError: { not: null } }],
+  };
+  const [groupedStatuses, recentFailureCount, recentFailures] = await Promise.all([
     prisma.webhookDelivery.groupBy({
       by: ["status"],
       where: {
@@ -77,16 +86,11 @@ export async function getTenantOperationsSummary(
         _all: true,
       },
     }),
+    prisma.webhookDelivery.count({
+      where: failureWhere,
+    }),
     prisma.webhookDelivery.findMany({
-      where: {
-        event: {
-          tenantId,
-        },
-        updatedAt: {
-          gte: since,
-        },
-        OR: [{ status: "FAILED" }, { lastError: { not: null } }],
-      },
+      where: failureWhere,
       orderBy: {
         updatedAt: "desc",
       },
