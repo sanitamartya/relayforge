@@ -114,6 +114,34 @@ docker compose logs --tail=100 db redis
 
 Run `npm run check` and address the reported ESLint, Prettier, or test failure. The GitHub Actions CI workflow runs the same quality command after installing dependencies and applying migrations.
 
+## Performance checks
+
+The event and delivery-history API endpoints use cursor pagination with a default page size of 50 and a maximum of 100. Use the returned `pagination.nextCursor` to fetch the next page rather than requesting an unbounded result set.
+
+The delivery worker supports bounded concurrency through `WEBHOOK_WORKER_CONCURRENCY` (1–100, default 10). Increase it gradually while observing webhook endpoint response times, Redis load, and database connection pressure. Do not set it to an arbitrarily high value.
+
+A dependency-free GET benchmark is included:
+
+```bash
+npm run benchmark
+```
+
+By default, it measures `GET /health` for 15 seconds with 10 concurrent requests. It reports requests per second, status counts, network errors, and latency percentiles.
+
+To benchmark a tenant's event-history query, set a URL and the tenant's bearer token in the current shell:
+
+```bash
+BENCHMARK_URL="http://127.0.0.1:3000/tenants/TENANT_ID/events?limit=50" \
+BENCHMARK_AUTHORIZATION="Bearer TENANT_API_KEY" \
+BENCHMARK_DURATION_SECONDS=30 \
+BENCHMARK_CONCURRENCY=10 \
+npm run benchmark
+```
+
+The tenant rate limiter is enabled on this endpoint. For a local benchmark only, temporarily raise `TENANT_RATE_LIMIT_MAX` in your private `.env` and restart the API so the rate limit does not dominate the results. Restore the original value after benchmarking. Never commit the API key or private environment file.
+
+Compare runs using the same target URL, duration, concurrency, data volume, and machine. Run the benchmark before and after a performance change; report throughput and p50/p95/p99 latency together. This simple benchmark is a repeatable local comparison, not a production load test.
+
 ## Operational endpoint access
 
 The local project exposes `/ready` and `/metrics` without authentication for development and monitoring. In a deployed environment, restrict these endpoints to trusted infrastructure or monitoring systems at the network or ingress layer.

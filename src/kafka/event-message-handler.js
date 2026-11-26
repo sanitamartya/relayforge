@@ -57,16 +57,18 @@ export function createKafkaEventMessageHandler({
         },
       });
 
-      for (const delivery of deliveries) {
-        await eventQueue.add(
-          "deliver-webhook",
-          {
-            deliveryId: delivery.id,
-          },
-          {
-            ...deliveryJobOptions,
-            jobId: delivery.id,
-          },
+      if (deliveries.length > 0) {
+        await eventQueue.addBulk(
+          deliveries.map((delivery) => ({
+            name: "deliver-webhook",
+            data: {
+              deliveryId: delivery.id,
+            },
+            opts: {
+              ...deliveryJobOptions,
+              jobId: delivery.id,
+            },
+          })),
         );
       }
 

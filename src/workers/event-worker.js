@@ -1,4 +1,5 @@
 /* global setInterval, clearInterval */
+import "dotenv/config";
 import { Worker } from "bullmq";
 import { prisma } from "../db/prisma.js";
 import { redisConnection } from "../queue/redis-connection.js";
@@ -6,11 +7,13 @@ import { eventQueue, deliveryJobOptions } from "../queue/event-queue.js";
 import { processDelivery } from "./delivery-processor.js";
 import { logger } from "../observability/logger.js";
 import { recordBackgroundOperation } from "../observability/metrics.js";
+import { parseWorkerConcurrency } from "./worker-config.js";
 
 const QUEUE_NAME = "relayforge-event-processing";
 const DISPATCH_INTERVAL_MS = 5000;
 const STALE_PROCESSING_MS = 60_000;
 const DISPATCH_BATCH_SIZE = 100;
+const workerConcurrency = parseWorkerConcurrency(process.env.WEBHOOK_WORKER_CONCURRENCY);
 
 const worker = new Worker(
   QUEUE_NAME,
@@ -23,6 +26,7 @@ const worker = new Worker(
   },
   {
     connection: redisConnection,
+    concurrency: workerConcurrency,
   },
 );
 

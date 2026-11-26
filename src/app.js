@@ -9,6 +9,7 @@ import { generateApiKey, hashApiKey } from "./security/api-key.js";
 import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
 import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
 import { rateLimitRedis } from "./queue/rate-limit-redis.js";
+import { encodePaginationCursor, parsePagination } from "./utils/pagination.js";
 
 const app = express();
 
@@ -155,6 +156,11 @@ app.get("/tenants/:id", async (req, res) => {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+    },
   });
 
   if (!tenant) {
@@ -171,15 +177,6 @@ app.get("/tenants/:id", async (req, res) => {
 app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   const { id: tenantId } = req.params;
   const url = req.body?.url;
-
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
-  }
 
   if (typeof url !== "string" || url.trim().length === 0) {
     return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL is required");
@@ -214,15 +211,6 @@ app.post("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
   const { eventType, payload } = req.body ?? {};
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
-  }
-
   if (typeof eventType !== "string" || eventType.trim().length === 0) {
     return sendError(res, 400, "VALIDATION_ERROR", "Event type is required");
   }
@@ -250,16 +238,15 @@ app.post("/tenants/:id/events", async (req, res) => {
       },
     });
 
-    const deliveries = await Promise.all(
-      endpoints.map((endpoint) =>
-        tx.webhookDelivery.create({
-          data: {
-            eventId: event.id,
-            endpointId: endpoint.id,
-          },
-        }),
-      ),
-    );
+    const deliveryResult =
+      endpoints.length === 0
+        ? { count: 0 }
+        : await tx.webhookDelivery.createMany({
+            data: endpoints.map((endpoint) => ({
+              eventId: event.id,
+              endpointId: endpoint.id,
+            })),
+          });
 
     await tx.eventOutbox.create({
       data: {
@@ -267,7 +254,7 @@ app.post("/tenants/:id/events", async (req, res) => {
       },
     });
 
-    return { event, deliveries };
+    return { event, deliveryCount: deliveryResult.count };
   });
 
   return sendSuccess(res, 201, {
@@ -276,21 +263,17 @@ app.post("/tenants/:id/events", async (req, res) => {
     eventType: result.event.eventType,
     payload: result.event.payload,
     createdAt: result.event.createdAt,
-    deliveryCount: result.deliveries.length,
+    deliveryCount: result.deliveryCount,
   });
 });
 
 // Retrieve delivery history for one event.
 app.get("/tenants/:id/events/:eventId/deliveries", async (req, res) => {
   const { id: tenantId, eventId } = req.params;
+  const pagination = parsePagination(req.query);
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
+  if (pagination.error) {
+    return sendError(res, 400, "VALIDATION_ERROR", pagination.error);
   }
 
   const event = await prisma.event.findFirst({
@@ -307,21 +290,46 @@ app.get("/tenants/:id/events/:eventId/deliveries", async (req, res) => {
     return sendError(res, 404, "EVENT_NOT_FOUND", "Event not found");
   }
 
-  const deliveries = await prisma.webhookDelivery.findMany({
-    where: {
-      eventId,
-    },
-    include: {
+  const where = { eventId };
+
+  if (pagination.cursor) {
+    where.OR = [
+      { createdAt: { gt: pagination.cursor.createdAt } },
+      {
+        createdAt: pagination.cursor.createdAt,
+        id: { gt: pagination.cursor.id },
+      },
+    ];
+  }
+
+  const records = await prisma.webhookDelivery.findMany({
+    where,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: pagination.limit + 1,
+    select: {
+      id: true,
+      eventId: true,
+      endpointId: true,
+      status: true,
+      attemptCount: true,
+      lastAttemptAt: true,
+      nextAttemptAt: true,
+      deliveredAt: true,
+      lastStatusCode: true,
+      lastError: true,
+      createdAt: true,
+      updatedAt: true,
       endpoint: {
         select: {
           url: true,
         },
       },
     },
-    orderBy: {
-      createdAt: "asc",
-    },
   });
+
+  const hasMore = records.length > pagination.limit;
+  const deliveries = records.slice(0, pagination.limit);
+  const lastDelivery = deliveries.at(-1);
 
   return sendSuccess(res, 200, {
     deliveries: deliveries.map((delivery) => ({
@@ -339,34 +347,58 @@ app.get("/tenants/:id/events/:eventId/deliveries", async (req, res) => {
       createdAt: delivery.createdAt,
       updatedAt: delivery.updatedAt,
     })),
+    pagination: {
+      limit: pagination.limit,
+      hasMore,
+      nextCursor: hasMore && lastDelivery ? encodePaginationCursor(lastDelivery) : null,
+    },
   });
 });
 
 app.get("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
+  const pagination = parsePagination(req.query);
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenant) {
-    return sendError(res, 404, "TENANT_NOT_FOUND", "Tenant not found");
+  if (pagination.error) {
+    return sendError(res, 400, "VALIDATION_ERROR", pagination.error);
   }
 
-  const events = await prisma.event.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: "desc" },
+  const where = { tenantId };
+
+  if (pagination.cursor) {
+    where.OR = [
+      { createdAt: { lt: pagination.cursor.createdAt } },
+      {
+        createdAt: pagination.cursor.createdAt,
+        id: { lt: pagination.cursor.id },
+      },
+    ];
+  }
+
+  const records = await prisma.event.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: pagination.limit + 1,
+    select: {
+      id: true,
+      tenantId: true,
+      eventType: true,
+      payload: true,
+      createdAt: true,
+    },
   });
 
+  const hasMore = records.length > pagination.limit;
+  const events = records.slice(0, pagination.limit);
+  const lastEvent = events.at(-1);
+
   return sendSuccess(res, 200, {
-    events: events.map((event) => ({
-      id: event.id,
-      tenantId: event.tenantId,
-      eventType: event.eventType,
-      payload: event.payload,
-      createdAt: event.createdAt,
-    })),
+    events,
+    pagination: {
+      limit: pagination.limit,
+      hasMore,
+      nextCursor: hasMore && lastEvent ? encodePaginationCursor(lastEvent) : null,
+    },
   });
 });
 

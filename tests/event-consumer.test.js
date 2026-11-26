@@ -10,7 +10,7 @@ const validEventId = "550e8400-e29b-41d4-a716-446655440000";
 function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "delivery-2" }] } = {}) {
   const calls = {
     findMany: [],
-    add: [],
+    addBulk: [],
     warnings: [],
     errors: [],
     logs: [],
@@ -26,8 +26,8 @@ function createHandlerHarness({ deliveries = [{ id: "delivery-1" }, { id: "deliv
       },
     },
     eventQueue: {
-      add: async (...args) => {
-        calls.add.push(args);
+      addBulk: async (jobs) => {
+        calls.addBulk.push(jobs);
       },
     },
     deliveryJobOptions: {
@@ -89,7 +89,7 @@ test("Kafka message handler ignores messages without a value", async () => {
 
   assert.equal(calls.warnings.length, 1);
   assert.equal(calls.findMany.length, 0);
-  assert.equal(calls.add.length, 0);
+  assert.equal(calls.addBulk.length, 0);
 });
 
 test("Kafka message handler ignores invalid JSON", async () => {
@@ -99,7 +99,7 @@ test("Kafka message handler ignores invalid JSON", async () => {
 
   assert.deepEqual(calls.warnings, ["kafka_message_invalid_json"]);
   assert.equal(calls.findMany.length, 0);
-  assert.equal(calls.add.length, 0);
+  assert.equal(calls.addBulk.length, 0);
 });
 
 test("Kafka message handler ignores events with invalid IDs", async () => {
@@ -113,7 +113,7 @@ test("Kafka message handler ignores events with invalid IDs", async () => {
 
   assert.deepEqual(calls.warnings, ["kafka_event_invalid_id"]);
   assert.equal(calls.findMany.length, 0);
-  assert.equal(calls.add.length, 0);
+  assert.equal(calls.addBulk.length, 0);
 });
 
 test("Kafka message handler queues pending deliveries for a valid event", async () => {
@@ -129,16 +129,18 @@ test("Kafka message handler queues pending deliveries for a valid event", async 
   assert.equal(calls.findMany[0].where.eventId, validEventId);
   assert.equal(calls.findMany[0].where.status, "PENDING");
   assert.equal(calls.findMany[0].where.OR.length, 2);
-  assert.equal(calls.add.length, 2);
-  assert.deepEqual(calls.add[0], [
-    "deliver-webhook",
-    { deliveryId: "delivery-1" },
-    { attempts: 3, jobId: "delivery-1" },
-  ]);
-  assert.deepEqual(calls.add[1], [
-    "deliver-webhook",
-    { deliveryId: "delivery-2" },
-    { attempts: 3, jobId: "delivery-2" },
+  assert.equal(calls.addBulk.length, 1);
+  assert.deepEqual(calls.addBulk[0], [
+    {
+      name: "deliver-webhook",
+      data: { deliveryId: "delivery-1" },
+      opts: { attempts: 3, jobId: "delivery-1" },
+    },
+    {
+      name: "deliver-webhook",
+      data: { deliveryId: "delivery-2" },
+      opts: { attempts: 3, jobId: "delivery-2" },
+    },
   ]);
   assert.deepEqual(calls.logs, [
     {
@@ -158,7 +160,7 @@ test("Kafka message handler does not queue when no pending deliveries exist", as
   });
 
   assert.equal(calls.findMany.length, 1);
-  assert.equal(calls.add.length, 0);
+  assert.equal(calls.addBulk.length, 0);
   assert.deepEqual(calls.logs, [
     {
       message: "kafka_event_deliveries_queued",
@@ -178,7 +180,7 @@ test("Kafka message handler propagates database errors", async () => {
       },
     },
     eventQueue: {
-      add: async () => {
+      addBulk: async () => {
         assert.fail("queue should not be called after a database error");
       },
     },
