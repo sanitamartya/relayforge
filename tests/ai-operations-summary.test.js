@@ -4,7 +4,7 @@ import request from "supertest";
 
 import app from "../src/app.js";
 import { createOllamaProvider } from "../src/ai/ollama-provider.js";
-import { sanitizeFailureReason } from "../src/services/operations-summary.js";
+import { buildOperationsFacts, sanitizeFailureReason } from "../src/services/operations-summary.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 import { prisma } from "../src/db/prisma.js";
 import { disconnectKafkaProducer } from "../src/kafka/event-producer.js";
@@ -39,7 +39,7 @@ test("Ollama provider sends a non-streaming chat request and returns its text", 
   assert.equal(result, "Three deliveries are pending.");
 });
 
-test("failure reason sanitizer removes credentials and webhook URLs", () => {
+test("operations facts preserve the full recent failure count", () => {\n  const facts = buildOperationsFacts({\n    statusCounts: { FAILED: 7 },\n    totalDeliveries: 7,\n    recentFailureCount: 7,\n    recentFailures: [],\n    generatedAt: new Date("2026-01-01T00:00:00.000Z"),\n  });\n\n  assert.equal(facts.recentFailureCount, 7);\n  assert.equal(facts.deliveryCounts.FAILED, 7);\n});\n\ntest("failure reason sanitizer removes credentials and webhook URLs", () => {
   const sanitized = sanitizeFailureReason(
     "Request failed for https://customer.example/hook?token=secret Bearer abc123",
   );
