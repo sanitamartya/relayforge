@@ -30,7 +30,9 @@ test("GET /tenants/:id/events returns only that tenant's events", async () => {
       },
     });
 
-    const response = await request(app).get(`/tenants/${tenantA.id}/events`).set("authorization", authorization);
+    const response = await request(app)
+      .get(`/tenants/${tenantA.id}/events`)
+      .set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.events.length, 1);
@@ -52,7 +54,9 @@ test("GET /tenants/:id/events returns an empty list for a tenant with no events"
   const { tenant, authorization } = await createTestTenant(prisma, "empty-tenant");
 
   try {
-    const response = await request(app).get(`/tenants/${tenant.id}/events`).set("authorization", authorization);
+    const response = await request(app)
+      .get(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data.events, []);
@@ -65,7 +69,9 @@ test("GET /tenants/:id/events returns an empty list for a tenant with no events"
 
 test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
   const { tenant, authorization } = await createTestTenant(prisma, "known-tenant");
-  const response = await request(app).get(`/tenants/${randomUUID()}/events`).set("authorization", authorization);
+  const response = await request(app)
+    .get(`/tenants/${randomUUID()}/events`)
+    .set("authorization", authorization);
   await prisma.tenant.deleteMany({ where: { id: tenant.id } });
 
   assert.equal(response.status, 404);

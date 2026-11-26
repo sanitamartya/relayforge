@@ -40,7 +40,9 @@ test("GET delivery history returns delivery status for an event", async () => {
   });
 
   try {
-    const response = await request(app).get(`/tenants/${tenant.id}/events/${event.id}/deliveries`).set("authorization", authorization);
+    const response = await request(app)
+      .get(`/tenants/${tenant.id}/events/${event.id}/deliveries`)
+      .set("authorization", authorization);
 
     assert.equal(response.status, 200);
     assert.equal(response.body.data.deliveries.length, 1);
@@ -75,7 +77,9 @@ test("GET delivery history returns 404 for an event owned by another tenant", as
   });
 
   try {
-    const response = await request(app).get(`/tenants/${tenantB.id}/events/${event.id}/deliveries`).set("authorization", authorization);
+    const response = await request(app)
+      .get(`/tenants/${tenantB.id}/events/${event.id}/deliveries`)
+      .set("authorization", authorization);
 
     assert.equal(response.status, 404);
     assert.equal(response.body.error.code, "EVENT_NOT_FOUND");

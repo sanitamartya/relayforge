@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import { prisma } from "../db/prisma.js";
 import { hashApiKey } from "../security/api-key.js";
@@ -44,10 +45,7 @@ export async function requireTenantApiKey(req, res, next) {
   const expectedHash = Buffer.from(tenant.apiKeyHash, "hex");
   const providedHash = Buffer.from(hashApiKey(apiKey), "hex");
 
-  if (
-    expectedHash.length !== providedHash.length ||
-    !timingSafeEqual(expectedHash, providedHash)
-  ) {
+  if (expectedHash.length !== providedHash.length || !timingSafeEqual(expectedHash, providedHash)) {
     return sendAuthenticationError(res);
   }
 

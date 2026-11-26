@@ -29,7 +29,10 @@ test("POST /tenants/:id/events creates an event and durable delivery", async () 
   let eventId;
 
   try {
-    const response = await request(app).post(`/tenants/${tenant.id}/events`).set("authorization", authorization).send(eventData);
+    const response = await request(app)
+      .post(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization)
+      .send(eventData);
 
     assert.equal(response.status, 201);
     assert.equal(response.body.data.tenantId, tenant.id);
@@ -104,10 +107,13 @@ test("POST /tenants/:id/events rejects a non-object payload", async () => {
   const { tenant, authorization } = await createTestTenant(prisma, "event-test");
 
   try {
-    const response = await request(app).post(`/tenants/${tenant.id}/events`).set("authorization", authorization).send({
-      eventType: "user.created",
-      payload: "not-an-object",
-    });
+    const response = await request(app)
+      .post(`/tenants/${tenant.id}/events`)
+      .set("authorization", authorization)
+      .send({
+        eventType: "user.created",
+        payload: "not-an-object",
+      });
 
     assert.equal(response.status, 400);
     assert.equal(response.body.error.code, "VALIDATION_ERROR");

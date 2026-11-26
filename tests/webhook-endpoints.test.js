@@ -20,7 +20,10 @@ before(async () => {
 test("POST /tenants/:id/webhook-endpoints registers and persists an endpoint", async () => {
   const url = "https://customer.example.com/webhooks";
 
-  const response = await request(app).post(`/tenants/${tenantId}/webhook-endpoints`).set("authorization", authorization).send({ url });
+  const response = await request(app)
+    .post(`/tenants/${tenantId}/webhook-endpoints`)
+    .set("authorization", authorization)
+    .send({ url });
 
   assert.equal(response.status, 201);
   assert.equal(response.body.data.tenantId, tenantId);
@@ -39,7 +42,10 @@ test("POST /tenants/:id/webhook-endpoints registers and persists an endpoint", a
 });
 
 test("POST /tenants/:id/webhook-endpoints rejects a missing URL", async () => {
-  const response = await request(app).post(`/tenants/${tenantId}/webhook-endpoints`).set("authorization", authorization).send({});
+  const response = await request(app)
+    .post(`/tenants/${tenantId}/webhook-endpoints`)
+    .set("authorization", authorization)
+    .send({});
 
   assert.equal(response.status, 400);
   assert.equal(response.body.error.code, "VALIDATION_ERROR");
