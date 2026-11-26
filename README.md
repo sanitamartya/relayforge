@@ -2,7 +2,7 @@
 
 **A multi-tenant webhook and event delivery platform built with Node.js.**
 
-RelayForge accepts application events, stores them in PostgreSQL, publishes event notifications to Kafka, and delivers webhook requests asynchronously through Redis/BullMQ workers. It demonstrates backend engineering concepts including tenant isolation, authentication, durable records, asynchronous processing, retries, delivery history, and SSRF protection.
+RelayForge accepts application events, stores them in PostgreSQL with a transactional outbox record, retries Kafka publication asynchronously, and delivers webhook requests through Redis/BullMQ workers. It demonstrates backend engineering concepts including tenant isolation, authentication, durable records, asynchronous processing, retries, delivery history, and SSRF protection.
 
 ## Current implementation
 
@@ -11,7 +11,8 @@ RelayForge accepts application events, stores them in PostgreSQL, publishes even
 - Existing tenant API key rotation
 - PostgreSQL persistence for tenants, events, endpoints, and delivery attempts
 - Webhook endpoint registration and event ingestion
-- Kafka event publishing and consumption
+- Kafka event publishing and consumption through a transactional PostgreSQL outbox
+- Retryable outbox publication with exponential backoff and stale-claim recovery
 - Redis/BullMQ asynchronous delivery jobs
 - Retry handling and recovery of stale processing records
 - Delivery status/history endpoints
@@ -49,7 +50,7 @@ Kafka consumer -------> Redis / BullMQ
                     PostgreSQL delivery result
 ```
 
-The API persists the event and its initial delivery records in a database transaction before publishing the event to Kafka. The Kafka consumer finds the corresponding delivery records and enqueues jobs. BullMQ workers perform HTTP delivery and update delivery state.
+The API persists the event, its initial delivery records, and its outbox publication intent in one PostgreSQL transaction. A separate publisher in the Kafka worker reads the outbox and retries transient publication failures with exponential backoff. This avoids losing the publication intent when Kafka is unavailable after the API transaction commits. The publisher uses at-least-once delivery: a crash after Kafka accepts a message but before the outbox is marked published can cause a duplicate message. The Kafka consumer finds durable delivery records and enqueues jobs using delivery IDs; the delivery processor atomically claims each database delivery so duplicate messages do not normally cause concurrent duplicate sends.
 
 The delivery worker can retry failed jobs according to the queue's retry policy. The dispatcher also periodically recovers pending deliveries and stale processing records.
 
@@ -128,7 +129,7 @@ API:
 npm start
 ```
 
-Kafka event consumer:
+Kafka event worker (consumer plus transactional outbox publisher):
 
 ```bash
 npm run kafka:worker
