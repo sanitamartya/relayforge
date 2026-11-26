@@ -1,6 +1,5 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import request from "supertest";
 
 import app from "../src/app.js";
