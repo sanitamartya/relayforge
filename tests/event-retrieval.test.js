@@ -78,6 +78,75 @@ test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
   assert.equal(response.body.error.code, "TENANT_NOT_FOUND");
 });
 
+test("GET events paginates without duplicate or missing records", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "event-pagination");
+  const createdEvents = [];
+
+  try {
+    for (let index = 0; index < 3; index += 1) {
+      createdEvents.push(
+        await prisma.event.create({
+          data: {
+            tenantId: tenant.id,
+            eventType: "pagination.test",
+            payload: { index },
+            createdAt: new Date(Date.UTC(2026, 10, 26, 10, 0, index)),
+          },
+        }),
+      );
+    }
+
+    const firstPage = await request(app)
+      .get(`/tenants/${tenant.id}/events?limit=2`)
+      .set("authorization", authorization);
+
+    assert.equal(firstPage.status, 200);
+    assert.equal(firstPage.body.data.events.length, 2);
+    assert.equal(firstPage.body.data.pagination.hasMore, true);
+    assert.ok(firstPage.body.data.pagination.nextCursor);
+
+    const secondPage = await request(app)
+      .get(
+        `/tenants/${tenant.id}/events?limit=2&cursor=${encodeURIComponent(firstPage.body.data.pagination.nextCursor)}`,
+      )
+      .set("authorization", authorization);
+
+    assert.equal(secondPage.status, 200);
+    assert.equal(secondPage.body.data.events.length, 1);
+    assert.equal(secondPage.body.data.pagination.hasMore, false);
+    assert.equal(secondPage.body.data.pagination.nextCursor, null);
+
+    const returnedIds = [
+      ...firstPage.body.data.events,
+      ...secondPage.body.data.events,
+    ].map((event) => event.id);
+
+    assert.equal(new Set(returnedIds).size, 3);
+    assert.deepEqual(returnedIds, createdEvents.slice().reverse().map((event) => event.id));
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: tenant.id },
+    });
+  }
+});
+
+test("GET events rejects an invalid pagination limit", async () => {
+  const { tenant, authorization } = await createTestTenant(prisma, "event-pagination-invalid");
+
+  try {
+    const response = await request(app)
+      .get(`/tenants/${tenant.id}/events?limit=101`)
+      .set("authorization", authorization);
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, "VALIDATION_ERROR");
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: tenant.id },
+    });
+  }
+});
+
 after(async () => {
   await eventQueue.close();
   await prisma.$disconnect();
