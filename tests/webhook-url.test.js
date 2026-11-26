@@ -84,7 +84,7 @@ test("resolvePublicWebhookAddresses accepts public DNS answers", async () => {
 
 test("resolvePublicWebhookAddresses rejects mixed public and private DNS answers", async () => {
   await assert.rejects(
-    resolvePublicWebhookAddresses("hooks.customer.com", async () => [
+    resolvePublicWebhookAddresses(\n      "hooks.customer.com",\n      async () => [
       { address: "93.184.216.34", family: 4 },
       { address: "10.0.0.12", family: 4 },
     ]),
