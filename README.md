@@ -149,6 +149,37 @@ Health check:
 curl http://localhost:3000/health
 ```
 
+## Local AI operations assistant
+
+RelayForge includes a read-only, tenant-scoped operations summary endpoint. It returns database-grounded delivery counts and recent failure details, plus an optional local-model narrative.
+
+The assistant uses the Ollama provider by default and does not require a paid model API. To enable generated narrative locally:
+
+1. Install and start Ollama on the development machine.
+2. Pull the default model:
+
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+
+3. Keep these settings in the private `.env` file (they are also documented in `.env.example`):
+
+   ```dotenv
+   AI_PROVIDER=ollama
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   OLLAMA_MODEL=qwen2.5:3b
+   AI_OPERATIONS_TIMEOUT_MS=2500
+   ```
+
+If the local model is unavailable or times out, RelayForge still returns the operational facts and a deterministic summary. Model output is narrative only; the database facts are authoritative and the assistant cannot perform actions.
+
+Example:
+
+```bash
+curl http://localhost:3000/tenants/<TENANT_ID>/ai/operations-summary \
+  -H "Authorization: Bearer <TENANT_API_KEY>"
+```
+
 ## API overview
 
 All successful responses use a `data` envelope. Errors use an `error` object with a machine-readable `code` and message.
@@ -160,6 +191,7 @@ All successful responses use a `data` envelope. Errors use an `error` object wit
 | GET    | `/metrics`                                | No                | Prometheus text-format metrics      |
 | POST   | `/tenants`                                | No                | Create tenant; returns API key once |
 | GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
+| GET    | `/tenants/:id/ai/operations-summary`      | Tenant bearer key | Read-only AI operations summary     |
 | POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
 | POST   | `/tenants/:id/events`                     | Tenant bearer key | Persist and publish an event        |
 | GET    | `/tenants/:id/events`                     | Tenant bearer key | Paginated tenant event history      |
