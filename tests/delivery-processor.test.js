@@ -1,4 +1,4 @@
-/* global Buffer */
+/* global Buffer, fetch */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -7,6 +7,8 @@ import { createServer } from "node:http";
 import { prisma } from "../src/db/prisma.js";
 import { eventQueue } from "../src/queue/event-queue.js";
 import { processDelivery } from "../src/workers/delivery-processor.js";
+
+const sendLocalRequest = (url, options) => fetch(url, options);
 
 async function createTestDelivery(url) {
   const tenant = await prisma.tenant.create({
@@ -74,7 +76,9 @@ test("delivery processor sends HTTP request and marks delivery DELIVERED", async
   const testData = await createTestDelivery(url);
 
   try {
-    const result = await processDelivery(testData.deliveryId);
+    const result = await processDelivery(testData.deliveryId, {
+      sendRequest: sendLocalRequest,
+    });
 
     assert.equal(result.delivered, true);
     assert.equal(result.statusCode, 204);
@@ -118,7 +122,9 @@ test("delivery processor records an HTTP failure for retry", async () => {
 
   try {
     await assert.rejects(
-      processDelivery(testData.deliveryId),
+      processDelivery(testData.deliveryId, {
+        sendRequest: sendLocalRequest,
+      }),
       /Webhook endpoint returned HTTP 503/,
     );
 
@@ -159,8 +165,8 @@ test("concurrent processing sends only one request for a delivery", async () => 
 
   try {
     const results = await Promise.all([
-      processDelivery(testData.deliveryId),
-      processDelivery(testData.deliveryId),
+      processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest }),
+      processDelivery(testData.deliveryId, { sendRequest: sendLocalRequest }),
     ]);
 
     assert.equal(requestCount, 1);
@@ -178,6 +184,54 @@ test("concurrent processing sends only one request for a delivery", async () => 
   } finally {
     await new Promise((resolve) => server.close(resolve));
 
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
+test("delivery processor rejects private IP destinations", async () => {
+  const testData = await createTestDelivery("http://127.0.0.1:8080/webhook");
+
+  try {
+    await assert.rejects(processDelivery(testData.deliveryId), /non-public IP address/);
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "PENDING");
+    assert.equal(savedDelivery.attemptCount, 1);
+    assert.match(savedDelivery.lastError, /non-public IP address/);
+  } finally {
+    await prisma.tenant.deleteMany({
+      where: { id: testData.tenantId },
+    });
+  }
+});
+
+test("delivery processor retries safely when the request rejects with null", async () => {
+  const testData = await createTestDelivery("https://example.com/webhook");
+
+  try {
+    await assert.rejects(
+      processDelivery(testData.deliveryId, {
+        sendRequest: async () => {
+          throw null;
+        },
+      }),
+      (error) => error === null,
+    );
+
+    const savedDelivery = await prisma.webhookDelivery.findUnique({
+      where: { id: testData.deliveryId },
+    });
+
+    assert.equal(savedDelivery.status, "PENDING");
+    assert.equal(savedDelivery.attemptCount, 1);
+    assert.equal(savedDelivery.lastError, "null");
+    assert.ok(savedDelivery.nextAttemptAt);
+  } finally {
     await prisma.tenant.deleteMany({
       where: { id: testData.tenantId },
     });

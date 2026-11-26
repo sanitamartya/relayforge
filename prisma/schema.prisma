@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,11 +13,18 @@ enum DeliveryStatus {
   FAILED
 }
 
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+}
+
 model Tenant {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  apiKeyHash String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   events    Event[]
   endpoints WebhookEndpoint[]
@@ -33,8 +39,25 @@ model Event {
 
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   deliveries WebhookDelivery[]
+  outbox    EventOutbox?
 
   @@index([tenantId, createdAt])
+}
+
+model EventOutbox {
+  id            String       @id @default(uuid()) @db.Uuid
+  eventId       String       @unique @db.Uuid
+  status        OutboxStatus @default(PENDING)
+  attemptCount  Int          @default(0)
+  nextAttemptAt DateTime?
+  publishedAt   DateTime?
+  lastError     String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
 }
 
 model WebhookEndpoint {

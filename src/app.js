@@ -1,12 +1,68 @@
 import express from "express";
-import { URL } from "node:url";
+import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
+import { logger } from "./observability/logger.js";
+import { recordHttpRequest, renderMetrics } from "./observability/metrics.js";
+import { parseWebhookUrl } from "./security/webhook-url.js";
 import { prisma } from "./db/prisma.js";
-// Event delivery is queued by the Kafka consumer.
-import { publishEvent } from "./kafka/event-producer.js";
+import { generateApiKey, hashApiKey } from "./security/api-key.js";
+import { requireTenantApiKey } from "./middleware/require-tenant-api-key.js";
+import { createTenantRateLimiter } from "./middleware/tenant-rate-limiter.js";
+import { rateLimitRedis } from "./queue/rate-limit-redis.js";
 
 const app = express();
 
-app.use(express.json());
+app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",
+  });
+
+  return next();
+});
+
+app.use((req, res, next) => {
+  const suppliedRequestId = req.get("x-request-id");
+  const requestId =
+    suppliedRequestId && /^[A-Za-z0-9._-]{1,128}$/.test(suppliedRequestId)
+      ? suppliedRequestId
+      : randomUUID();
+
+  req.requestId = requestId;
+  res.set("X-Request-Id", requestId);
+
+  const startedAt = performance.now();
+
+  res.on("finish", () => {
+    const durationMs = performance.now() - startedAt;
+    const route = req.route?.path ? `${req.baseUrl}${req.route.path}` : "unmatched";
+
+    recordHttpRequest({
+      method: req.method,
+      route,
+      statusCode: res.statusCode,
+      durationMs,
+    });
+
+    logger.info("http_request_completed", {
+      requestId,
+      method: req.method,
+      route,
+      statusCode: res.statusCode,
+      durationMs: Number(durationMs.toFixed(2)),
+    });
+  });
+
+  return next();
+});
+
+app.use(express.json({ limit: "1mb" }));
 
 function sendSuccess(res, statusCode, data) {
   return res.status(statusCode).json({ data });
@@ -20,6 +76,40 @@ function sendError(res, statusCode, code, message) {
     },
   });
 }
+
+app.get("/ready", async (req, res) => {
+  const checks = {
+    database: "ok",
+    redis: "ok",
+  };
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    checks.database = "error";
+  }
+
+  try {
+    await rateLimitRedis.ping();
+  } catch {
+    checks.redis = "error";
+  }
+
+  const ready = Object.values(checks).every((status) => status === "ok");
+
+  return res.status(ready ? 200 : 503).json({
+    data: {
+      status: ready ? "ready" : "not_ready",
+      service: "relayforge",
+      checks,
+    },
+  });
+});
+
+app.get("/metrics", (req, res) => {
+  res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+  return res.status(200).send(renderMetrics());
+});
 
 app.get("/health", (req, res) => {
   return sendSuccess(res, 200, {
@@ -35,18 +125,30 @@ app.post("/tenants", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Tenant name is required");
   }
 
+  const apiKey = generateApiKey();
+
   const tenant = await prisma.tenant.create({
     data: {
       name: name.trim(),
+      apiKeyHash: hashApiKey(apiKey),
     },
   });
 
   return sendSuccess(res, 201, {
     id: tenant.id,
     name: tenant.name,
+    apiKey,
     createdAt: tenant.createdAt,
   });
 });
+
+app.use("/tenants/:id", requireTenantApiKey);
+
+const tenantRateLimiter = createTenantRateLimiter({
+  getRedisClient: () => rateLimitRedis,
+});
+
+app.use("/tenants/:id", tenantRateLimiter);
 
 app.get("/tenants/:id", async (req, res) => {
   const { id } = req.params;
@@ -86,23 +188,9 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   let parsedUrl;
 
   try {
-    parsedUrl = new URL(url.trim());
-  } catch {
-    return sendError(res, 400, "VALIDATION_ERROR", "Webhook URL must be a valid URL");
-  }
-
-  if (
-    !["http:", "https:"].includes(parsedUrl.protocol) ||
-    !parsedUrl.hostname ||
-    parsedUrl.username ||
-    parsedUrl.password
-  ) {
-    return sendError(
-      res,
-      400,
-      "VALIDATION_ERROR",
-      "Webhook URL must use HTTP or HTTPS and cannot contain credentials",
-    );
+    parsedUrl = parseWebhookUrl(url);
+  } catch (error) {
+    return sendError(res, 400, "VALIDATION_ERROR", error.message);
   }
 
   const endpoint = await prisma.webhookEndpoint.create({
@@ -121,7 +209,7 @@ app.post("/tenants/:id/webhook-endpoints", async (req, res) => {
   });
 });
 
-// Publish an event and create its delivery records.
+// Persist an event, its deliveries, and its Kafka publication intent atomically.
 app.post("/tenants/:id/events", async (req, res) => {
   const { id: tenantId } = req.params;
   const { eventType, payload } = req.body ?? {};
@@ -143,7 +231,6 @@ app.post("/tenants/:id/events", async (req, res) => {
     return sendError(res, 400, "VALIDATION_ERROR", "Event payload must be a JSON object or array");
   }
 
-  // Create the event and its delivery records in one transaction.
   const result = await prisma.$transaction(async (tx) => {
     const event = await tx.event.create({
       data: {
@@ -174,17 +261,13 @@ app.post("/tenants/:id/events", async (req, res) => {
       ),
     );
 
-    return { event, deliveries };
-  });
+    await tx.eventOutbox.create({
+      data: {
+        eventId: event.id,
+      },
+    });
 
-  // Publish the persisted event to Kafka.
-  // The Kafka consumer will queue the matching deliveries.
-  await publishEvent({
-    id: result.event.id,
-    tenantId: result.event.tenantId,
-    eventType: result.event.eventType,
-    payload: result.event.payload,
-    createdAt: result.event.createdAt,
+    return { event, deliveries };
   });
 
   return sendSuccess(res, 201, {
@@ -291,9 +374,23 @@ app.use((req, res) => {
   return sendError(res, 404, "NOT_FOUND", "Route not found");
 });
 
+// Express requires four parameters to register error-handling middleware.
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(err);
+  if (err?.type === "entity.too.large") {
+    return sendError(res, 413, "PAYLOAD_TOO_LARGE", "Request body must not exceed 1 MB");
+  }
 
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return sendError(res, 400, "INVALID_JSON", "Request body must contain valid JSON");
+  }
+
+  logger.error("request_failed", {
+    requestId: req.requestId,
+    method: req.method,
+    route: req.route?.path ?? "unmatched",
+    error: err,
+  });
   return sendError(res, 500, "INTERNAL_SERVER_ERROR", "An unexpected error occurred");
 });
 
