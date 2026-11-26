@@ -4,9 +4,10 @@
 
 Provide a read-only, tenant-scoped assistant that summarizes the operational status of webhook deliveries.
 
-## Endpoint
+## Endpoints
 
-`GET /tenants/:id/ai/operations-summary`
+- `GET /tenants/:id/ai/operations-summary`
+- `POST /tenants/:id/ai/ask` with a required question of at most 500 characters
 
 The existing tenant bearer-key middleware protects the route. Operational data is queried using the authenticated tenant ID, not a tenant identifier supplied to the model.
 
