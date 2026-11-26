@@ -63,16 +63,19 @@ export function createTenantRateLimiter({
     }
 
     try {
-      const redis = await getRedisClient();
       let timeout;
-      const result = await Promise.race([
-        redis.eval(
+      const rateLimitCommand = (async () => {
+        const redis = await getRedisClient();
+        return redis.eval(
           incrementTenantWindowScript,
           1,
           `relayforge:rate-limit:tenant:${tenantId}`,
           limit,
           windowMs,
-        ),
+        );
+      })();
+      const result = await Promise.race([
+        rateLimitCommand,
         new Promise((_, reject) => {
           timeout = setTimeout(
             () => reject(new Error("Redis rate-limit command timed out")),
