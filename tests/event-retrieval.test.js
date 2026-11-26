@@ -10,7 +10,10 @@ import { prisma } from "../src/db/prisma.js";
 import { createTestTenant } from "./helpers/tenant-auth.js";
 
 test("GET /tenants/:id/events returns only that tenant's events", async () => {
-  const { tenant: tenantA, authorization } = await createTestTenant(prisma, "tenant-a");
+  const { tenant: tenantA, authorization } = await createTestTenant(
+    prisma,
+    "tenant-a",
+  );
 
   const { tenant: tenantB } = await createTestTenant(prisma, "tenant-b");
 
@@ -51,8 +54,11 @@ test("GET /tenants/:id/events returns only that tenant's events", async () => {
   }
 });
 
-test("GET /tenants/:id/events returns an empty list for a tenant with no events", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "empty-tenant");
+test("GET events returns an empty list for a tenant without events", async () => {
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "empty-tenant",
+  );
 
   try {
     const response = await request(app)
@@ -69,7 +75,10 @@ test("GET /tenants/:id/events returns an empty list for a tenant with no events"
 });
 
 test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "known-tenant");
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "known-tenant",
+  );
   const response = await request(app)
     .get(`/tenants/${randomUUID()}/events`)
     .set("authorization", authorization);
@@ -80,7 +89,10 @@ test("GET /tenants/:id/events returns 404 for an unknown tenant", async () => {
 });
 
 test("GET events paginates without duplicate or missing records", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "event-pagination");
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "event-pagination",
+  );
   const createdEvents = [];
 
   try {
@@ -110,8 +122,9 @@ test("GET events paginates without duplicate or missing records", async () => {
       limit: "2",
       cursor: firstPage.body.data.pagination.nextCursor,
     });
+    const path = `/tenants/${tenant.id}/events`;
     const secondPage = await request(app)
-      .get(`/tenants/${tenant.id}/events?${nextPageQuery}`)
+      .get(`${path}?${nextPageQuery}`)
       .set("authorization", authorization);
 
     assert.equal(secondPage.status, 200);
@@ -125,7 +138,10 @@ test("GET events paginates without duplicate or missing records", async () => {
     ].map((event) => event.id);
 
     assert.equal(new Set(returnedIds).size, 3);
-    assert.deepEqual(returnedIds, createdEvents.slice().reverse().map((event) => event.id));
+    assert.deepEqual(
+      returnedIds,
+      createdEvents.slice().reverse().map((event) => event.id),
+    );
   } finally {
     await prisma.tenant.deleteMany({
       where: { id: tenant.id },
@@ -134,7 +150,10 @@ test("GET events paginates without duplicate or missing records", async () => {
 });
 
 test("GET events rejects an invalid pagination limit", async () => {
-  const { tenant, authorization } = await createTestTenant(prisma, "event-pagination-invalid");
+  const { tenant, authorization } = await createTestTenant(
+    prisma,
+    "event-pagination-invalid",
+  );
 
   try {
     const response = await request(app)
