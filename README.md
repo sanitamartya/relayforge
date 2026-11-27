@@ -1,42 +1,40 @@
 # RelayForge
 
-**A multi-tenant webhook and event delivery platform built with Node.js.**
+**A multi-tenant webhook and event delivery platform built with Node.js, PostgreSQL, Kafka, Redis, and BullMQ.**
 
-RelayForge accepts application events, stores them in PostgreSQL with a transactional outbox record, retries Kafka publication asynchronously, and delivers webhook requests through Redis/BullMQ workers. It demonstrates backend engineering concepts including tenant isolation, authentication, durable records, asynchronous processing, retries, delivery history, and SSRF protection.
+RelayForge is a backend engineering portfolio project that accepts application events and delivers them to registered customer webhooks through an asynchronous, retryable event-processing pipeline. It demonstrates durable event handling, tenant isolation, distributed processing, operational observability, and security-conscious webhook delivery.
 
-## Current implementation
+> **Project status:** Core implementation through the AI Operations Assistant (Phase 13) is complete and validated locally. Cloud deployment and production-environment validation are planned next. RelayForge is a portfolio project, not a managed production service.
 
-- Tenant creation with one-time generated API keys
-- SHA-256 API key hash storage and tenant-scoped bearer authentication
-- Existing tenant API key rotation
-- PostgreSQL persistence for tenants, events, endpoints, and delivery attempts
-- Webhook endpoint registration and event ingestion
-- Kafka event publishing and consumption through a transactional PostgreSQL outbox
-- Retryable outbox publication with exponential backoff and stale-claim recovery
-- Redis/BullMQ asynchronous delivery jobs
-- Retry handling and recovery of stale processing records
-- Delivery status/history endpoints
-- Redis-backed per-tenant rate limiting
-- Webhook URL validation and DNS/IP-based SSRF defenses
-- HTTP response hardening, JSON body limit, and structured errors
-- Read-only AI operations summary and tenant-scoped natural-language Q&A using local Ollama
-- Unit and route tests, linting, formatting checks, and GitHub Actions CI
+## Highlights
+
+- Multi-tenant API with tenant-scoped bearer API keys
+- One-time API key display, hashed key storage, and key rotation
+- PostgreSQL persistence for tenants, events, webhook endpoints, delivery records, and outbox records
+- Transactional outbox with retryable Kafka publication
+- Kafka event streaming and consumer processing
+- Redis and BullMQ background webhook delivery
+- Delivery retries and stale-work recovery
+- Per-tenant rate limiting
+- Delivery history and cursor-based pagination
+- Webhook URL validation and SSRF defenses
+- Prometheus metrics and structured JSON logs
+- Read-only AI Operations Assistant powered by local Ollama
+- Automated tests, linting, formatting checks, and GitHub Actions CI
 
 ## Architecture
 
 ```text
 Client
-  |
-  | Bearer API key
+  | Tenant bearer API key
   v
 Express API -------> PostgreSQL
-                         | Event / Delivery / Outbox
+                         | Event + Delivery + Outbox
                          v
-                   Outbox publisher
+                  Outbox publisher
                          |
-                         | retryable publish
                          v
-                     Kafka topic
+                    Kafka topic
                          |
                          v
 Kafka consumer -------> Redis / BullMQ
@@ -44,44 +42,43 @@ Kafka consumer -------> Redis / BullMQ
                            v
                     Delivery worker
                            |
-                           | Resolve + validate public DNS
-                           | Pin validated address
+                           | Validate URL and resolved IPs
                            v
                     Customer webhook
                            |
                            v
-                    PostgreSQL delivery result
+                    PostgreSQL result
 ```
 
-The API persists the event, its initial delivery records, and its outbox publication intent in one PostgreSQL transaction. A separate publisher in the Kafka worker reads the outbox and retries transient publication failures with exponential backoff. This avoids losing the publication intent when Kafka is unavailable after the API transaction commits. The publisher uses at-least-once delivery: a crash after Kafka accepts a message but before the outbox is marked published can cause a duplicate message. The Kafka worker keeps retrying the consumer connection after startup failures and continues polling the outbox during broker outages. The Kafka consumer finds durable delivery records and enqueues jobs using delivery IDs; the delivery processor atomically claims each database delivery so duplicate messages do not normally cause concurrent duplicate sends.
+The API writes the event, its initial delivery records, and the outbox intent in one PostgreSQL transaction. The outbox publisher retries Kafka publication with exponential backoff. Kafka consumers enqueue durable delivery IDs, and workers atomically claim delivery records before sending webhooks.
 
-The delivery worker can retry failed jobs according to the queue's retry policy. The dispatcher also periodically recovers pending deliveries and stale processing records.
+The outbox and Kafka flow is **at-least-once**: a crash after Kafka accepts a message but before the outbox record is marked published can result in a duplicate message. Delivery claiming and durable records help prevent concurrent duplicate sends.
 
 ## Technology stack
 
-| Layer                | Technology                     |
-| -------------------- | ------------------------------ |
-| Runtime              | Node.js 22+                    |
-| API                  | Express 5                      |
-| Database             | PostgreSQL 18                  |
-| ORM                  | Prisma 7                       |
-| Queue                | Redis 7, BullMQ                |
-| Event streaming      | Apache Kafka 4.x               |
-| Tests                | Node.js test runner, Supertest |
-| Code quality         | ESLint, Prettier               |
-| CI                   | GitHub Actions                 |
-| Local infrastructure | Docker Compose                 |
+| Layer | Technology |
+| --- | --- |
+| Runtime | Node.js 22+ |
+| API | Express 5 |
+| Database | PostgreSQL 18 |
+| ORM | Prisma 7 |
+| Queue | Redis 7, BullMQ |
+| Event streaming | Apache Kafka 4.x |
+| Tests | Node.js test runner, Supertest |
+| Quality | ESLint, Prettier |
+| CI | GitHub Actions |
+| Local infrastructure | Docker Compose |
 
-## Requirements
+## Getting started
+
+### Requirements
 
 - Node.js 22 or newer
 - npm
 - Docker Engine and Docker Compose
 - Git
 
-## Local setup
-
-### 1. Clone and install
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/sanitamartya/relayforge.git
@@ -89,42 +86,42 @@ cd relayforge
 npm ci
 ```
 
-### 2. Configure environment
+### 2. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Set a strong local `POSTGRES_PASSWORD` and make sure `DATABASE_URL` uses the same credentials. The example configuration uses:
+Set a strong local `POSTGRES_PASSWORD` and ensure `DATABASE_URL` uses the same credentials. Keep environment files private; they are ignored by Git.
 
-- PostgreSQL: `localhost:5434`
-- Redis: `localhost:6380`
-- Kafka: `localhost:9092`
-- API: `localhost:3000`
+The local development ports are:
 
-Keep `.env` private; it is ignored by Git.
+| Service | Host port |
+| --- | ---: |
+| API | 3000 |
+| PostgreSQL | 5434 |
+| Redis | 6380 |
+| Kafka | 9092 |
 
 ### 3. Start infrastructure
 
 ```bash
-docker compose up -d
+docker compose up -d db redis kafka
 docker compose ps
 ```
 
-Wait until PostgreSQL and Redis report healthy. Kafka may take a little longer to become ready.
+Wait for PostgreSQL and Redis to become healthy. Kafka may take longer to start.
 
-### 4. Generate Prisma client and apply migrations
+### 4. Prepare the database
 
 ```bash
 npx prisma generate
 npx prisma migrate deploy
 ```
 
-For local schema development only, use Prisma's migration development workflow rather than editing a migration already applied to a shared database.
+### 5. Run the application processes
 
-### 5. Start the application processes
-
-Run each process in its own terminal from the project root.
+Start each process in a separate terminal from the project root.
 
 API:
 
@@ -132,97 +129,46 @@ API:
 npm start
 ```
 
-Kafka event worker (consumer plus transactional outbox publisher):
+Kafka consumer and outbox publisher:
 
 ```bash
 npm run kafka:worker
 ```
 
-Redis/BullMQ delivery worker and dispatcher:
+BullMQ delivery worker and dispatcher:
 
 ```bash
 npm run worker
 ```
 
-Health check:
+Check the API:
 
 ```bash
 curl http://localhost:3000/health
 ```
 
-## Local AI operations assistant
-
-RelayForge includes a read-only, tenant-scoped operations summary endpoint. It returns database-grounded delivery counts and recent failure details, plus an optional local-model narrative.
-
-The assistant uses the Ollama provider by default and does not require a paid model API. To enable generated narrative locally:
-
-1. Install and start Ollama on the development machine.
-2. Pull the default model:
-
-   ```bash
-   ollama pull qwen2.5:3b
-   ```
-
-3. Keep these settings in the private `.env` file (they are also documented in `.env.example`):
-
-   ```dotenv
-   AI_PROVIDER=ollama
-   OLLAMA_BASE_URL=http://127.0.0.1:11434
-   OLLAMA_MODEL=qwen2.5:3b
-   AI_OPERATIONS_TIMEOUT_MS=30000
-   ```
-
-If the local model is unavailable or times out, RelayForge still returns the operational facts and a deterministic summary. Model output is narrative only; the database facts are authoritative and the assistant cannot perform actions.
-
-The model URL is relative to the API process. If the API runs inside the repository's Docker Compose container, `127.0.0.1` refers to that container, not the host. Set `OLLAMA_BASE_URL` in the private `.env.container` to `http://host.docker.internal:11434` for a host-running Ollama (the Compose API service includes a Linux host-gateway mapping), or to the private address of a separate Ollama server. In a cloud deployment, use a private network address for the model host; do not expose Ollama publicly.
-
-Example:
-
-```bash
-curl http://localhost:3000/tenants/<TENANT_ID>/ai/operations-summary \
-  -H "Authorization: Bearer <TENANT_API_KEY>"
-```
-
-The same read-only facts can be queried with a natural-language question:
-
-```bash
-curl -X POST http://localhost:3000/tenants/<TENANT_ID>/ai/ask \
-  -H "Authorization: Bearer <TENANT_API_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Why are my deliveries failing?"}'
-```
-
 ## API overview
 
-All successful responses use a `data` envelope. Errors use an `error` object with a machine-readable `code` and message.
+Successful responses use a `data` envelope. Errors use an `error` object containing a machine-readable code and message.
 
-| Method | Route                                     | Authentication    | Purpose                             |
-| ------ | ----------------------------------------- | ----------------- | ----------------------------------- |
-| GET    | `/health`                                 | No                | API liveness response               |
-| GET    | `/ready`                                  | No                | PostgreSQL and Redis readiness      |
-| GET    | `/metrics`                                | No                | Prometheus text-format metrics      |
-| POST   | `/tenants`                                | No                | Create tenant; returns API key once |
-| GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
-| GET    | `/tenants/:id/ai/operations-summary`      | Tenant bearer key | Read-only AI operations summary     |
-| POST   | `/tenants/:id/ai/ask`                     | Tenant bearer key | Ask a read-only operations question |
-| POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
-| POST   | `/tenants/:id/events`                     | Tenant bearer key | Persist and publish an event        |
-| GET    | `/tenants/:id/events`                     | Tenant bearer key | Paginated tenant event history      |
-| GET    | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Paginated delivery history          |
+| Method | Route | Authentication | Purpose |
+| --- | --- | --- | --- |
+| GET | `/health` | None | Liveness check |
+| GET | `/ready` | None | PostgreSQL and Redis readiness |
+| GET | `/metrics` | None | Prometheus metrics |
+| POST | `/tenants` | None | Create tenant; returns API key once |
+| GET | `/tenants/:id` | Tenant bearer key | Read tenant |
+| GET | `/tenants/:id/ai/operations-summary` | Tenant bearer key | Read-only AI operations summary |
+| POST | `/tenants/:id/ai/ask` | Tenant bearer key | Ask a read-only operations question |
+| POST | `/tenants/:id/webhook-endpoints` | Tenant bearer key | Register webhook endpoint |
+| POST | `/tenants/:id/events` | Tenant bearer key | Create event and delivery records |
+| GET | `/tenants/:id/events` | Tenant bearer key | Paginated event history |
+| GET | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Paginated delivery history |
 
-Event and delivery history endpoints use cursor pagination. The default page size is 50 records; `limit` accepts 1–100. When a response has more records, use its `pagination.nextCursor` value as the next request's `cursor` query parameter. Stable timestamp-and-ID ordering avoids duplicates when records share a timestamp.
-
-Example:
-
-```bash
-curl -sS "http://localhost:3000/tenants/TENANT_ID/events?limit=25" \
-  -H 'authorization: Bearer TENANT_API_KEY'
-```
-
-Tenant-scoped requests must include:
+Tenant-scoped requests use:
 
 ```http
-Authorization: Bearer rf_live_<secret>
+Authorization: Bearer rf_live_<tenant-api-key>
 ```
 
 ### Create a tenant
@@ -233,11 +179,11 @@ curl -sS http://localhost:3000/tenants \
   -d '{"name":"Example Company"}'
 ```
 
-Save the returned `apiKey` immediately. It is only returned at tenant creation or key rotation.
+Save the returned `apiKey` immediately. It is only shown when the key is created or rotated.
 
 ### Register a webhook endpoint
 
-Replace `TENANT_ID` and `TENANT_API_KEY` with the values returned when creating your tenant. Use a publicly reachable HTTP(S) webhook URL. RelayForge intentionally rejects local and private network destinations.
+Use a publicly reachable HTTP(S) webhook URL. RelayForge rejects local and private network destinations.
 
 ```bash
 curl -sS http://localhost:3000/tenants/TENANT_ID/webhook-endpoints \
@@ -255,9 +201,7 @@ curl -sS http://localhost:3000/tenants/TENANT_ID/events \
   -d '{"eventType":"order.created","payload":{"orderId":"ord_123","total":49.99}}'
 ```
 
-The response includes the event ID and number of delivery records created for enabled endpoints.
-
-### Inspect events and delivery attempts
+### Inspect event and delivery history
 
 ```bash
 curl -sS http://localhost:3000/tenants/TENANT_ID/events \
@@ -267,58 +211,87 @@ curl -sS http://localhost:3000/tenants/TENANT_ID/events/EVENT_ID/deliveries \
   -H 'authorization: Bearer TENANT_API_KEY'
 ```
 
-## API key management
+History endpoints use cursor pagination. The default page size is 50; `limit` accepts 1–100. Use `pagination.nextCursor` as the next request's `cursor` parameter.
 
-Tenant API keys use the `rf_live_` prefix and high-entropy random bytes. RelayForge stores the SHA-256 hash rather than the plaintext key.
+## AI Operations Assistant
 
-To rotate a tenant key:
+RelayForge includes a read-only, tenant-scoped assistant that answers operational questions using database-grounded delivery facts.
+
+The default provider is local [Ollama](https://ollama.com/); no paid model API is required. To enable generated narratives:
+
+1. Install and start Ollama.
+2. Download the default model:
+
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+
+3. Configure the private environment file:
+
+   ```dotenv
+   AI_PROVIDER=ollama
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   OLLAMA_MODEL=qwen2.5:3b
+   AI_OPERATIONS_TIMEOUT_MS=30000
+   ```
+
+Example operations summary:
 
 ```bash
-npm run tenant:key:rotate -- <tenant-uuid>
+curl http://localhost:3000/tenants/TENANT_ID/ai/operations-summary \
+  -H "Authorization: Bearer TENANT_API_KEY"
 ```
 
-Rotation invalidates the previous key. Copy the new key from the command output and store it securely. The key cannot be recovered from the database.
+Ask an operational question:
 
-## Security controls
+```bash
+curl -X POST http://localhost:3000/tenants/TENANT_ID/ai/ask \
+  -H "Authorization: Bearer TENANT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"How many deliveries failed recently?"}'
+```
 
-- Tenant-scoped bearer authentication
-- Constant-time comparison of API key hashes
-- Redis-backed per-tenant rate limiting
-- Fail-closed behavior when the rate limiter is unavailable
+If the model is unavailable or times out, RelayForge returns the operational facts with a deterministic fallback. Database facts are authoritative; model output is narrative only. The assistant is read-only and does not execute operations.
+
+When the API runs in Docker and Ollama runs on the host, configure `OLLAMA_BASE_URL` in the private container environment file to `http://host.docker.internal:11434` (the Compose configuration maps the host gateway). In a cloud environment, use a private network address for the model host; do not expose Ollama publicly.
+
+## Security
+
+- Tenant-scoped bearer authentication and tenant isolation
+- High-entropy API keys; SHA-256 hash storage
+- Constant-time API key hash comparison
+- Redis-backed per-tenant rate limiting with fail-closed behavior
 - HTTP security headers and disabled Express fingerprint header
 - `Cache-Control: no-store` for API responses
-- JSON body size limit of 1 MB
+- 1 MB JSON request body limit
 - Webhook URL scheme and credential validation
-- Rejection of local, reserved, private, and special-purpose IP addresses
-- DNS resolution at delivery time; every returned address is validated
-- HTTP requests use a validated DNS lookup callback to reduce DNS-rebinding risk
+- Rejection of private, reserved, local, and special-purpose IP addresses
+- DNS resolution and address validation at delivery time
+- Validated DNS lookup callback to reduce DNS-rebinding risk
 - Redirects are not automatically followed
 - Webhook request header size limit
 
-**Important:** This is a portfolio project and a work in progress, not a managed production service. Before production use, complete the remaining reliability, operational, infrastructure, and security review work.
-
 ## Observability
 
-- `GET /health` is a liveness check and does not require dependencies to be available.
-- `GET /ready` checks PostgreSQL and Redis and returns HTTP 503 when either dependency is unavailable.
-- `GET /metrics` exposes HTTP request counts, server-error counts, request-duration histograms, background operation outcomes, process uptime, and resident memory in Prometheus text format.
-- Every HTTP response includes an `X-Request-Id`. A valid client-provided ID is preserved; otherwise RelayForge generates a UUID. The same ID is included in the request-completion JSON log.
-- API and worker logs are JSON lines with a timestamp, severity, service name, event message, and relevant context.
-- Background delivery and Kafka outbox outcomes are recorded in logs and metrics.
+- `GET /health`: liveness check
+- `GET /ready`: dependency readiness; returns HTTP 503 if PostgreSQL or Redis is unavailable
+- `GET /metrics`: Prometheus text-format metrics, including HTTP and background-operation metrics
+- Request IDs returned in `X-Request-Id` and included in request-completion logs
+- Structured JSON logs for API and worker processes
 
-Metrics are process-local and reset when the process restarts. In a deployed environment, restrict access to `/metrics` and operational endpoints to trusted monitoring and infrastructure.
+Metrics are process-local and reset on restart. Restrict metrics and operational endpoints to trusted monitoring systems in deployed environments.
 
-See [the operations runbook](docs/operations-runbook.md) for diagnosis and routine checks.
+See the [operations runbook](docs/operations-runbook.md) for routine checks and troubleshooting.
 
 ## Development and verification
 
-Run tests:
+Run the test suite:
 
 ```bash
 npm test
 ```
 
-Run tests with Node's built-in coverage report:
+Run coverage:
 
 ```bash
 npm run test:coverage
@@ -330,29 +303,19 @@ Run all quality checks:
 npm run check
 ```
 
-The quality check runs ESLint, Prettier validation, and the test suite with coverage. GitHub Actions runs the same check on pushes and pull requests.
+The `check` script runs ESLint, Prettier validation, and tests with coverage. GitHub Actions runs the project checks on pushes and pull requests.
 
-## Project roadmap
+## Roadmap
 
-RelayForge is being built in phases:
-
-1. Project foundation
-2. Backend application foundation
-3. Database engineering
-4. Multi-tenant API and product features
-5. Asynchronous event processing
-6. Reliable event delivery
-7. Advanced distributed systems
-8. Kafka and event streaming
-9. Security and production hardening
-10. Testing and quality engineering
-11. Performance and scalability
-12. Cloud deployment and infrastructure
-13. AI operations assistant
-14. Portfolio and interview readiness
-
-The local production deployment configuration is completed in Phase 12. The actual cloud rollout follows Phase 13's AI assistant validation and precedes Phase 14 portfolio finalization. The roadmap reflects the agreed engineering journey; later capabilities may still be in progress.
+- [x] Core multi-tenant webhook and event delivery platform
+- [x] Transactional outbox and Kafka event processing
+- [x] Background delivery, retries, and recovery
+- [x] Security hardening and observability
+- [x] Docker-based local deployment configuration
+- [x] Local AI Operations Assistant (Phase 13)
+- [ ] Cloud deployment and production-environment validation
+- [ ] Portfolio and interview readiness (Phase 14)
 
 ## License
 
-This repository currently uses the license value declared in `package.json`. Confirm and add the intended license file before distributing the project.
+The project currently declares the **ISC** license in `package.json`.
