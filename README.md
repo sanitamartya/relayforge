@@ -56,18 +56,18 @@ The outbox and Kafka flow is **at-least-once**: a crash after Kafka accepts a me
 
 ## Technology stack
 
-| Layer | Technology |
-| --- | --- |
-| Runtime | Node.js 22+ |
-| API | Express 5 |
-| Database | PostgreSQL 18 |
-| ORM | Prisma 7 |
-| Queue | Redis 7, BullMQ |
-| Event streaming | Apache Kafka 4.x |
-| Tests | Node.js test runner, Supertest |
-| Quality | ESLint, Prettier |
-| CI | GitHub Actions |
-| Local infrastructure | Docker Compose |
+| Layer                | Technology                     |
+| -------------------- | ------------------------------ |
+| Runtime              | Node.js 22+                    |
+| API                  | Express 5                      |
+| Database             | PostgreSQL 18                  |
+| ORM                  | Prisma 7                       |
+| Queue                | Redis 7, BullMQ                |
+| Event streaming      | Apache Kafka 4.x               |
+| Tests                | Node.js test runner, Supertest |
+| Quality              | ESLint, Prettier               |
+| CI                   | GitHub Actions                 |
+| Local infrastructure | Docker Compose                 |
 
 ## Getting started
 
@@ -96,12 +96,12 @@ Set a strong local `POSTGRES_PASSWORD` and ensure `DATABASE_URL` uses the same c
 
 The local development ports are:
 
-| Service | Host port |
-| --- | ---: |
-| API | 3000 |
-| PostgreSQL | 5434 |
-| Redis | 6380 |
-| Kafka | 9092 |
+| Service    | Host port |
+| ---------- | --------: |
+| API        |      3000 |
+| PostgreSQL |      5434 |
+| Redis      |      6380 |
+| Kafka      |      9092 |
 
 ### 3. Start infrastructure
 
@@ -151,19 +151,19 @@ curl http://localhost:3000/health
 
 Successful responses use a `data` envelope. Errors use an `error` object containing a machine-readable code and message.
 
-| Method | Route | Authentication | Purpose |
-| --- | --- | --- | --- |
-| GET | `/health` | None | Liveness check |
-| GET | `/ready` | None | PostgreSQL and Redis readiness |
-| GET | `/metrics` | None | Prometheus metrics |
-| POST | `/tenants` | None | Create tenant; returns API key once |
-| GET | `/tenants/:id` | Tenant bearer key | Read tenant |
-| GET | `/tenants/:id/ai/operations-summary` | Tenant bearer key | Read-only AI operations summary |
-| POST | `/tenants/:id/ai/ask` | Tenant bearer key | Ask a read-only operations question |
-| POST | `/tenants/:id/webhook-endpoints` | Tenant bearer key | Register webhook endpoint |
-| POST | `/tenants/:id/events` | Tenant bearer key | Create event and delivery records |
-| GET | `/tenants/:id/events` | Tenant bearer key | Paginated event history |
-| GET | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Paginated delivery history |
+| Method | Route                                     | Authentication    | Purpose                             |
+| ------ | ----------------------------------------- | ----------------- | ----------------------------------- |
+| GET    | `/health`                                 | None              | Liveness check                      |
+| GET    | `/ready`                                  | None              | PostgreSQL and Redis readiness      |
+| GET    | `/metrics`                                | None              | Prometheus metrics                  |
+| POST   | `/tenants`                                | None              | Create tenant; returns API key once |
+| GET    | `/tenants/:id`                            | Tenant bearer key | Read tenant                         |
+| GET    | `/tenants/:id/ai/operations-summary`      | Tenant bearer key | Read-only AI operations summary     |
+| POST   | `/tenants/:id/ai/ask`                     | Tenant bearer key | Ask a read-only operations question |
+| POST   | `/tenants/:id/webhook-endpoints`          | Tenant bearer key | Register webhook endpoint           |
+| POST   | `/tenants/:id/events`                     | Tenant bearer key | Create event and delivery records   |
+| GET    | `/tenants/:id/events`                     | Tenant bearer key | Paginated event history             |
+| GET    | `/tenants/:id/events/:eventId/deliveries` | Tenant bearer key | Paginated delivery history          |
 
 Tenant-scoped requests use:
 
@@ -314,7 +314,6 @@ The `check` script runs ESLint, Prettier validation, and tests with coverage. Gi
 - [x] Docker-based local deployment configuration
 - [x] Local AI Operations Assistant (Phase 13)
 - [ ] Cloud deployment and production-environment validation
-- [ ] Portfolio and interview readiness (Phase 14)
 
 ## License
 
